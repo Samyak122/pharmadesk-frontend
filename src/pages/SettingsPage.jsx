@@ -77,10 +77,10 @@ export function SettingsPage() {
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-6">
         <div className="flex flex-wrap items-center gap-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          <img src={resolvePharmacyLogo()} alt="PharmaDesk logo" className="h-14 w-14 rounded-2xl object-cover" />
+          <img src={resolvePharmacyLogo()} alt="GenPharma logo" className="h-14 w-14 rounded-2xl object-cover" />
           <div>
             <p className="font-semibold text-slate-900">Default pharmacy branding is active</p>
-            <p>The built-in PharmaDesk logo will be used for the sidebar, login, navbar, invoice, print view, and exported PDFs. No logo URL entry is required.</p>
+            <p>The built-in GenPharma logo will be used for the sidebar, login, navbar, invoice, print view, and exported PDFs. No logo URL entry is required.</p>
           </div>
         </div>
 

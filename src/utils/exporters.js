@@ -24,7 +24,7 @@ export function exportReportPdf(reportName, rows, columns, settings = {}) {
   } catch {
     // ignore image load issues and keep the text header
   }
-  doc.text(settings?.pharmacy_name || 'PharmaDesk', 100, 40);
+  doc.text(settings?.pharmacy_name || 'GenPharma', 100, 40);
   doc.setFontSize(10);
   doc.text(`Generated: ${new Date().toLocaleString()}`, 40, 60);
   doc.text(`Filters: ${reportName}`, 40, 78);
@@ -74,7 +74,7 @@ export function exportInvoicePdf(invoice, settings = {}) {
   }
 
   doc.setFontSize(18);
-  doc.text(settings?.pharmacy_name || 'PharmaDesk', margin + 72, y);
+  doc.text(settings?.pharmacy_name || 'GenPharma', margin + 72, y);
   y += 20;
   doc.setFontSize(10);
   doc.text([settings?.address_line_1, settings?.address_line_2].filter(Boolean).join(', '), margin, y);

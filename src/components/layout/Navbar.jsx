@@ -51,7 +51,7 @@ export function Navbar() {
   return (
     <header className="flex items-center justify-between rounded-[28px] border border-slate-200 bg-white/80 px-6 py-4 shadow-sm backdrop-blur">
       <div className="flex items-center gap-3">
-        <img src={resolvePharmacyLogo()} alt="PharmaDesk logo" className="h-10 w-10 rounded-2xl object-cover" />
+        <img src={resolvePharmacyLogo()} alt="GenPharma logo" className="h-10 w-10 rounded-2xl object-cover" />
         <div>
           <p className="text-sm font-medium text-slate-500">Overview</p>
           <div className="flex items-center gap-2 text-lg font-semibold text-slate-900">

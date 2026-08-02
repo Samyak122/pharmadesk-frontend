@@ -34,9 +34,9 @@ export function InvoicePrint({ invoice, settings }) {
       <div className="invoice-print-page w-full border border-slate-200 bg-white p-6 sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-6 border-b border-slate-200 pb-6">
           <div className="space-y-3">
-            <img src={settings?.logo_url || logoImage} alt="Logo" className="h-16 w-auto rounded-2xl object-contain" />
+            <img src={resolvePharmacyLogo(settings)} alt="GenPharma logo" className="h-16 w-auto rounded-2xl object-contain" />
             <div>
-              <h2 className="text-2xl font-semibold text-slate-900">{settings?.pharmacy_name || 'PharmaDesk'}</h2>
+              <h2 className="text-2xl font-semibold text-slate-900">{settings?.pharmacy_name || 'GenPharma'}</h2>
               <p className="text-sm text-slate-600">{settings?.owner_name || 'Owner Name'}</p>
               <p className="text-sm text-slate-600">{[settings?.address_line_1, settings?.address_line_2].filter(Boolean).join(', ')}</p>
               <p className="text-sm text-slate-600">{[settings?.city, settings?.state, settings?.pin_code].filter(Boolean).join(' - ')}</p>

@@ -22,10 +22,10 @@ export function Sidebar() {
     <aside className="flex h-screen w-72 flex-col border-r border-slate-200 bg-white/80 px-6 py-6 shadow-sm backdrop-blur">
       <div>
         <div className="mb-8 flex items-center gap-3">
-          <img src={resolvePharmacyLogo()} alt="PharmaDesk logo" className="h-11 w-11 rounded-2xl object-cover" />
+          <img src={resolvePharmacyLogo()} alt="GenPharma logo" className="h-11 w-11 rounded-2xl object-cover" />
           <div>
-            <p className="text-lg font-semibold text-slate-900">PharmaDesk</p>
-            <p className="text-sm text-slate-500">Pharmacy Ops Suite</p>
+            <p className="text-lg font-semibold text-slate-900">GenPharma</p>
+            <p className="text-sm text-slate-500">GenPharma Pharmacy Management</p>
           </div>
         </div>
 

@@ -30,14 +30,14 @@ function ProtectedLayout({ children }) {
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <Loader label="Authenticating" />;
+  if (loading) return <Loader label="Authenticating GenPharma" />;
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }
 
 function AppRoutes() {
   const { user, loading } = useAuth();
-  if (loading) return <Loader label="Loading app" />;
+  if (loading) return <Loader label="Loading GenPharma" />;
 
   return (
     <Routes>
