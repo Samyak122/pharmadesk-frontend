@@ -97,6 +97,16 @@ export async function createInvoice(payload) {
   return data;
 }
 
+export async function getInvoiceById(invoiceId) {
+  const { data } = await api.get(`/billing/${invoiceId}`);
+  return data;
+}
+
+export async function updateInvoice(invoiceId, payload) {
+  const { data } = await api.put(`/billing/${invoiceId}`, payload);
+  return data;
+}
+
 export async function listInvoices() {
   const { data } = await api.get('/billing');
   return data || [];

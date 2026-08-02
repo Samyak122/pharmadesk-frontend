@@ -5,7 +5,7 @@ import { EmptyState } from '../components/common/EmptyState';
 import { Modal } from '../components/common/Modal';
 import { InvoicePreview } from '../components/common/InvoicePreview';
 import { useToast } from '../components/common/ToastProvider';
-import { createCustomer, formatCurrency, getCustomerHistory, getSettings, listCustomers, updateCustomer } from '../services/pharmaService';
+import { createCustomer, formatCurrency, getCustomerHistory, getInvoiceById, getSettings, listCustomers, updateCustomer, updateInvoice } from '../services/pharmaService';
 import { exportInvoicePdf } from '../utils/exporters';
 import { resolvePharmacyLogo } from '../utils/logoUtils';
 
@@ -142,6 +142,19 @@ export function CustomersPage() {
   const [customerForm, setCustomerForm] = useState({ customer_name: '', phone: '', email: '', address: '' });
   const [previewInvoice, setPreviewInvoice] = useState(null);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [invoiceForm, setInvoiceForm] = useState({
+    customer_id: '',
+    invoice_no: '',
+    invoice_date: '',
+    payment_method: 'Cash',
+    payment_status: 'Paid',
+    gst_percent: 0,
+    discount_amount: 0,
+    notes: '',
+    items: [],
+  });
+  const [invoiceSaving, setInvoiceSaving] = useState(false);
   const { showToast } = useToast();
 
   const loadCustomers = async () => {
@@ -219,8 +232,104 @@ export function CustomersPage() {
 
   const stats = useMemo(() => customers.reduce((acc, customer) => ({ ...acc, [customer.customer_id]: customer }), {}), [customers]);
 
-  const openEditComingSoon = () => {
-    showToast('Invoice editing will be available after backend support is implemented.', 'info');
+  const openInvoiceEditor = async (invoice) => {
+    try {
+      const data = await getInvoiceById(invoice.invoice_id);
+      const invoiceDetails = data?.invoice || data || null;
+      const items = (invoiceDetails?.items || []).map((item) => ({
+        medicine_id: item.inventoryBatch?.medicine?.medicine_id || item.medicine_id || '',
+        quantity: Number(item.quantity || 0),
+        unit_price: Number(item.unit_price || 0),
+        discount_amount: Number(item.discount_amount || 0),
+        medicine_name: item.inventoryBatch?.medicine?.medicine_name || item.medicine_name || '',
+      }));
+
+      setEditingInvoice(invoiceDetails);
+      setInvoiceForm({
+        customer_id: invoiceDetails?.customer_id || '',
+        invoice_no: invoiceDetails?.invoice_no || '',
+        invoice_date: invoiceDetails?.invoice_date || '',
+        payment_method: invoiceDetails?.payment_method || 'Cash',
+        payment_status: invoiceDetails?.payment_status || 'Paid',
+        gst_percent: Number(invoiceDetails?.gst_amount && invoiceDetails?.total_amount ? ((invoiceDetails.gst_amount / Math.max(1, Number(invoiceDetails.total_amount) - Number(invoiceDetails.discount_amount || 0))) * 100) : 0),
+        discount_amount: Number(invoiceDetails?.discount_amount || 0),
+        notes: invoiceDetails?.notes || '',
+        items,
+      });
+      setModalOpen(true);
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Unable to load invoice details', 'error');
+    }
+  };
+
+  const updateInvoiceField = (field, value) => {
+    setInvoiceForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const updateInvoiceItem = (index, field, value) => {
+    setInvoiceForm((prev) => ({
+      ...prev,
+      items: prev.items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item),
+    }));
+  };
+
+  const addInvoiceItem = () => {
+    setInvoiceForm((prev) => ({
+      ...prev,
+      items: [...prev.items, { medicine_id: '', quantity: 1, unit_price: 0, discount_amount: 0, medicine_name: '' }],
+    }));
+  };
+
+  const removeInvoiceItem = (index) => {
+    setInvoiceForm((prev) => ({
+      ...prev,
+      items: prev.items.filter((_, itemIndex) => itemIndex !== index),
+    }));
+  };
+
+  const saveInvoice = async (event) => {
+    event.preventDefault();
+    try {
+      setInvoiceSaving(true);
+
+      const payload = {
+        customer_id: invoiceForm.customer_id || null,
+        invoice_no: invoiceForm.invoice_no,
+        invoice_date: invoiceForm.invoice_date,
+        payment_method: invoiceForm.payment_method,
+        payment_status: invoiceForm.payment_status,
+        gst_percent: Number(invoiceForm.gst_percent || 0),
+        discount_amount: Number(invoiceForm.discount_amount || 0),
+        notes: invoiceForm.notes,
+        items: invoiceForm.items.map((item) => ({
+          medicine_id: Number(item.medicine_id),
+          quantity: Number(item.quantity || 0),
+          unit_price: Number(item.unit_price || 0),
+          discount_amount: Number(item.discount_amount || 0),
+        })),
+      };
+
+      await updateInvoice(editingInvoice.invoice_id, payload);
+      const refreshed = await getCustomerHistory(selectedCustomer?.customer_id || history?.customer?.customer_id);
+      setHistory(refreshed);
+      setEditingInvoice(null);
+      setInvoiceForm({
+        customer_id: '',
+        invoice_no: '',
+        invoice_date: '',
+        payment_method: 'Cash',
+        payment_status: 'Paid',
+        gst_percent: 0,
+        discount_amount: 0,
+        notes: '',
+        items: [],
+      });
+      showToast('Invoice updated successfully', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Unable to update invoice', 'error');
+    } finally {
+      setInvoiceSaving(false);
+    }
   };
 
   if (loading) return <Loader label="Loading GenPharma customers" />;
@@ -269,7 +378,7 @@ export function CustomersPage() {
         description={history ? `Purchase summary • ${history.stats?.totalPurchases || 0} bills • ${formatCurrency(history.stats?.totalSpent)}` : (selectedCustomer ? 'Update the customer record used by billing.' : 'Create a customer record for future billing.')}
         onClose={() => setModalOpen(false)}
         panelClassName="w-full max-w-[1000px]"
-        bodyClassName="overflow-hidden px-0 py-0"
+        bodyClassName="px-0 py-0"
       >
         {!history ? (
           <div className="px-5 py-4 sm:px-6">
@@ -282,7 +391,7 @@ export function CustomersPage() {
             </form>
           </div>
         ) : (
-          <div className="flex h-full flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
             <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:px-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -292,8 +401,81 @@ export function CustomersPage() {
                 <div className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-white">Invoice History</div>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
-              {history.invoices?.length ? (
+            <div className="flex-1 px-5 py-4 sm:px-6">
+              {editingInvoice ? (
+                <form onSubmit={saveInvoice} className="space-y-4">
+                  <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+                        <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Invoice No</span>
+                        <input className="w-full bg-transparent outline-none" value={invoiceForm.invoice_no} onChange={(e) => updateInvoiceField('invoice_no', e.target.value)} required />
+                      </label>
+                      <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+                        <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Invoice Date</span>
+                        <input className="w-full bg-transparent outline-none" type="date" value={invoiceForm.invoice_date} onChange={(e) => updateInvoiceField('invoice_date', e.target.value)} />
+                      </label>
+                      <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+                        <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Payment Method</span>
+                        <select className="w-full bg-transparent outline-none" value={invoiceForm.payment_method} onChange={(e) => updateInvoiceField('payment_method', e.target.value)}>
+                          <option value="Cash">Cash</option>
+                          <option value="Card">Card</option>
+                          <option value="UPI">UPI</option>
+                        </select>
+                      </label>
+                      <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+                        <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Payment Status</span>
+                        <select className="w-full bg-transparent outline-none" value={invoiceForm.payment_status} onChange={(e) => updateInvoiceField('payment_status', e.target.value)}>
+                          <option value="Paid">Paid</option>
+                          <option value="Pending">Pending</option>
+                        </select>
+                      </label>
+                      <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+                        <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">GST %</span>
+                        <input className="w-full bg-transparent outline-none" type="number" min="0" step="0.01" value={invoiceForm.gst_percent} onChange={(e) => updateInvoiceField('gst_percent', e.target.value)} />
+                      </label>
+                      <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+                        <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Discount</span>
+                        <input className="w-full bg-transparent outline-none" type="number" min="0" step="0.01" value={invoiceForm.discount_amount} onChange={(e) => updateInvoiceField('discount_amount', e.target.value)} />
+                      </label>
+                    </div>
+                    <label className="mt-3 block rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+                      <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Notes</span>
+                      <textarea className="w-full bg-transparent outline-none" rows="3" value={invoiceForm.notes} onChange={(e) => updateInvoiceField('notes', e.target.value)} />
+                    </label>
+                  </div>
+
+                  <div className="space-y-3">
+                    {invoiceForm.items.map((item, index) => (
+                      <div key={`${item.medicine_id || index}-${index}`} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="grid gap-3 md:grid-cols-3">
+                          <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+                            <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Medicine ID</span>
+                            <input className="w-full bg-transparent outline-none" value={item.medicine_id} onChange={(e) => updateInvoiceItem(index, 'medicine_id', e.target.value)} />
+                          </label>
+                          <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+                            <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Quantity</span>
+                            <input className="w-full bg-transparent outline-none" type="number" min="1" value={item.quantity} onChange={(e) => updateInvoiceItem(index, 'quantity', e.target.value)} />
+                          </label>
+                          <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+                            <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Unit Price</span>
+                            <input className="w-full bg-transparent outline-none" type="number" min="0" step="0.01" value={item.unit_price} onChange={(e) => updateInvoiceItem(index, 'unit_price', e.target.value)} />
+                          </label>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between">
+                          <div className="text-sm text-slate-500">Medicine name: {item.medicine_name || '—'}</div>
+                          <button type="button" onClick={() => removeInvoiceItem(index)} className="rounded-2xl border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700">Remove</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={addInvoiceItem} className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">Add item</button>
+                    <button type="submit" disabled={invoiceSaving} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-70">{invoiceSaving ? 'Saving...' : 'Save Invoice'}</button>
+                    <button type="button" onClick={() => { setEditingInvoice(null); setInvoiceForm({ customer_id: '', invoice_no: '', invoice_date: '', payment_method: 'Cash', payment_status: 'Paid', gst_percent: 0, discount_amount: 0, notes: '', items: [] }); }} className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">Cancel</button>
+                  </div>
+                </form>
+              ) : history.invoices?.length ? (
                 <div className="space-y-3">
                   {history.invoices.map((invoice) => (
                     <div key={invoice.invoice_id} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
@@ -327,9 +509,8 @@ export function CustomersPage() {
                         <button type="button" onClick={() => handleInvoicePrint(invoice)} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
                           <Printer size={14} /> Print
                         </button>
-                        <button type="button" onClick={openEditComingSoon} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                        <button type="button" onClick={() => openInvoiceEditor(invoice)} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
                           Edit Bill
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-700">Coming Soon</span>
                         </button>
                       </div>
                     </div>
@@ -341,7 +522,7 @@ export function CustomersPage() {
         )}
       </Modal>
 
-      <Modal open={previewModalOpen} title="Invoice Preview" description="Professional invoice preview generated from the latest backend invoice data." onClose={() => setPreviewModalOpen(false)} panelClassName="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <Modal open={previewModalOpen} title="Invoice Preview" description="Professional invoice preview generated from the latest backend invoice data." onClose={() => setPreviewModalOpen(false)} panelClassName="max-w-6xl">
         {previewInvoice ? <InvoicePreview invoice={previewInvoice} settings={settings} onPrint={() => {
           const printWindow = window.open('', '_blank', 'width=900,height=900');
           if (!printWindow) return;
