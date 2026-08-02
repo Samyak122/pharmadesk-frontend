@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Eye, Printer, UserPlus } from 'lucide-react';
+import { Download, Eye, Printer, Search, UserPlus } from 'lucide-react';
 import { EmptyState } from '../components/common/EmptyState';
 import { Modal } from '../components/common/Modal';
 import { InvoicePreview } from '../components/common/InvoicePreview';
