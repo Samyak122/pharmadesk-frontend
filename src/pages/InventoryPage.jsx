@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, PackagePlus } from 'lucide-react';
-import { Loader } from '../components/common/Loader';
+import { PackagePlus } from 'lucide-react';
 import { EmptyState } from '../components/common/EmptyState';
 import { Modal } from '../components/common/Modal';
+import { SearchField } from '../components/common/SearchField';
 import { useToast } from '../components/common/ToastProvider';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { createInventory, createMedicine, deleteInventory, listInventory, updateInventory } from '../services/pharmaService';
 
 export function InventoryPage({ defaultFilter = 'all' }) {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [searching, setSearching] = useState(false);
   const [filters, setFilters] = useState(() => {
     if (defaultFilter === 'stock') return { search: '', lowStock: true, expired: false };
     if (defaultFilter === 'expiry') return { search: '', lowStock: false, expired: false };
@@ -22,16 +24,19 @@ export function InventoryPage({ defaultFilter = 'all' }) {
   const [customForm, setCustomForm] = useState({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, min_stock: 5, location: '', barcode: '' });
   const [customSubmitting, setCustomSubmitting] = useState(false);
   const { showToast } = useToast();
+  const debouncedSearch = useDebouncedValue(filters.search, 300);
 
-  const loadInventory = async () => {
+  const loadInventory = async (keyword = debouncedSearch) => {
     try {
+      setError('');
+      setSearching(true);
       let data = [];
       if (defaultFilter === 'stock') {
-        data = await listInventory({ search: filters.search, lowStock: true, expired: false });
+        data = await listInventory({ search: keyword, lowStock: true, expired: false });
       } else if (defaultFilter === 'expiry') {
         const [soonData, expiredData] = await Promise.all([
-          listInventory({ search: filters.search, expiringSoon: 30 }),
-          listInventory({ search: filters.search, expired: true }),
+          listInventory({ search: keyword, expiringSoon: 30 }),
+          listInventory({ search: keyword, expired: true }),
         ]);
         const seen = new Set();
         data = [...(soonData || []), ...(expiredData || [])].filter((batch) => {
@@ -41,20 +46,33 @@ export function InventoryPage({ defaultFilter = 'all' }) {
           return true;
         });
       } else {
-        data = await listInventory({ search: filters.search, lowStock: filters.lowStock, expired: filters.expired });
+        data = await listInventory({ search: keyword, lowStock: filters.lowStock, expired: filters.expired });
       }
       setBatches(data || []);
     } catch (err) {
       setError(err.response?.data?.message || 'Cannot connect to server.');
     } finally {
       setLoading(false);
+      setSearching(false);
     }
   };
 
   useEffect(() => {
-    setLoading(true);
-    loadInventory();
-  }, [filters.search, filters.lowStock, filters.expired, defaultFilter]);
+    let cancelled = false;
+
+    const runSearch = async () => {
+      setLoading(true);
+      if (!cancelled) {
+        await loadInventory(debouncedSearch);
+      }
+    };
+
+    runSearch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedSearch, filters.lowStock, filters.expired, defaultFilter]);
 
   const openAdjustModal = (batch) => {
     setActiveBatch(batch);
@@ -128,8 +146,6 @@ export function InventoryPage({ defaultFilter = 'all' }) {
     expired: batches.filter((batch) => batch.isExpired).length,
   }), [batches]);
 
-  if (loading) return <Loader label="Loading inventory" />;
-
   return (
     <div className="space-y-6 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -138,9 +154,8 @@ export function InventoryPage({ defaultFilter = 'all' }) {
           <p className="text-sm text-slate-500">Batch-level stock control and expiry awareness are sourced from the backend.</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <div className="relative">
-            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input className="rounded-2xl border border-slate-200 px-10 py-3 text-sm" placeholder="Search medicine" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} />
+          <div className="min-w-[220px]">
+            <SearchField value={filters.search} onChange={(value) => setFilters((prev) => ({ ...prev, search: value }))} placeholder="Search medicine" loading={searching} />
           </div>
           <button type="button" onClick={() => setCustomModalOpen(true)} className="flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">
             <PackagePlus size={16} /> Add Custom Product
@@ -148,11 +163,11 @@ export function InventoryPage({ defaultFilter = 'all' }) {
           {!defaultFilter ? (
             <>
               <label className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-600">
-                <input type="checkbox" checked={filters.lowStock} onChange={(e) => setFilters({ ...filters, lowStock: e.target.checked })} />
+                <input type="checkbox" checked={filters.lowStock} onChange={(e) => setFilters((prev) => ({ ...prev, lowStock: e.target.checked }))} />
                 Low Stock
               </label>
               <label className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-600">
-                <input type="checkbox" checked={filters.expired} onChange={(e) => setFilters({ ...filters, expired: e.target.checked })} />
+                <input type="checkbox" checked={filters.expired} onChange={(e) => setFilters((prev) => ({ ...prev, expired: e.target.checked }))} />
                 Expired
               </label>
             </>
@@ -164,6 +179,12 @@ export function InventoryPage({ defaultFilter = 'all' }) {
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Low stock batches: {summary.lowStock}</div>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">Expired batches: {summary.expired}</div>
       </div>
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+          <span>Loading inventory…</span>
+        </div>
+      ) : null}
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       {batches.length ? (
         <div className="overflow-hidden rounded-2xl border border-slate-200">

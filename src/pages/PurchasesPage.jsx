@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, PlusCircle } from 'lucide-react';
-import { Loader } from '../components/common/Loader';
+import { PlusCircle } from 'lucide-react';
 import { EmptyState } from '../components/common/EmptyState';
 import { Modal } from '../components/common/Modal';
+import { SearchField } from '../components/common/SearchField';
 import { useToast } from '../components/common/ToastProvider';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { createPurchase, getSuppliers, listPurchases, searchMedicines } from '../services/pharmaService';
 import { formatCurrency } from '../services/pharmaService';
 
@@ -12,6 +13,8 @@ export function PurchasesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [searching, setSearching] = useState(false);
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [modalOpen, setModalOpen] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
   const [medicineResults, setMedicineResults] = useState([]);
@@ -34,20 +37,47 @@ export function PurchasesPage() {
     load();
   }, []);
 
-  const searchMedicineCatalog = async (value) => {
-    setForm({ ...form, medicine_id: '' });
+  const searchMedicineCatalog = (value) => {
+    setForm((prev) => ({ ...prev, medicine_id: '' }));
     setSearch(value);
     if (!value) {
       setMedicineResults([]);
       return;
     }
-    try {
-      const results = await searchMedicines(value);
-      setMedicineResults(results || []);
-    } catch {
-      setMedicineResults([]);
-    }
   };
+
+  useEffect(() => {
+    if (!debouncedSearch) {
+      setMedicineResults([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const runSearch = async () => {
+      try {
+        setSearching(true);
+        const results = await searchMedicines(debouncedSearch);
+        if (!cancelled) {
+          setMedicineResults(results || []);
+        }
+      } catch {
+        if (!cancelled) {
+          setMedicineResults([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setSearching(false);
+        }
+      }
+    };
+
+    runSearch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedSearch]);
 
   const submitPurchase = async (event) => {
     event.preventDefault();
@@ -84,8 +114,6 @@ export function PurchasesPage() {
 
   const totalPurchases = useMemo(() => purchases.reduce((sum, purchase) => sum + Number(purchase.total_amount || 0), 0), [purchases]);
 
-  if (loading) return <Loader label="Loading purchases" />;
-
   return (
     <div className="space-y-6 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -99,6 +127,12 @@ export function PurchasesPage() {
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">Total purchase value: {formatCurrency(totalPurchases)}</div>
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+          <span>Loading purchases…</span>
+        </div>
+      ) : null}
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       {purchases.length ? (
         <div className="overflow-hidden rounded-2xl border border-slate-200">
@@ -138,9 +172,8 @@ export function PurchasesPage() {
             {suppliers.map((supplier) => (<option key={supplier.supplier_id} value={supplier.supplier_id}>{supplier.supplier_name}</option>))}
           </select>
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Invoice number" value={form.invoice_no} onChange={(e) => setForm({ ...form, invoice_no: e.target.value })} />
-          <div className="relative md:col-span-2">
-            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input className="w-full rounded-2xl border border-slate-200 px-10 py-3 text-sm" placeholder="Search medicine" value={search} onChange={(e) => searchMedicineCatalog(e.target.value)} />
+          <div className="md:col-span-2">
+            <SearchField value={search} onChange={searchMedicineCatalog} placeholder="Search medicine" loading={searching} />
           </div>
           <select className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" value={form.medicine_id} onChange={(e) => setForm({ ...form, medicine_id: e.target.value })}>
             <option value="">Select medicine</option>

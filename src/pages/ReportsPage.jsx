@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Printer, Download, FileSpreadsheet, Search as SearchIcon } from 'lucide-react';
-import { Loader } from '../components/common/Loader';
+import { Printer, Download, FileSpreadsheet } from 'lucide-react';
 import { EmptyState } from '../components/common/EmptyState';
+import { SearchField } from '../components/common/SearchField';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { getReports, getSettings } from '../services/pharmaService';
 import { exportReportExcel, exportReportPdf } from '../utils/exporters';
 
@@ -20,6 +21,7 @@ export function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [page, setPage] = useState(1);
   const [activeReport, setActiveReport] = useState('sales');
   const [settings, setSettings] = useState(null);
@@ -52,9 +54,9 @@ export function ReportsPage() {
 
     return source.filter((row) => {
       const haystack = Object.values(row).join(' ').toLowerCase();
-      return haystack.includes(search.toLowerCase());
+      return haystack.includes(debouncedSearch.toLowerCase());
     });
-  }, [activeReport, reports, search]);
+  }, [activeReport, debouncedSearch, reports]);
 
   const pagedRows = useMemo(() => {
     const start = (page - 1) * rowsPerPage;
@@ -63,7 +65,7 @@ export function ReportsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [activeReport, search]);
+  }, [activeReport, debouncedSearch]);
 
   const handleExportExcel = () => {
     const report = reportMeta.find((item) => item.key === activeReport);
@@ -76,8 +78,6 @@ export function ReportsPage() {
     if (!report) return;
     exportReportPdf(report.title, activeRows, report.columns, settings);
   };
-
-  if (loading) return <Loader label="Loading reports" />;
 
   return (
     <div className="space-y-6">
@@ -98,9 +98,8 @@ export function ReportsPage() {
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">Purchase value: ₹{Number(totals.purchases || 0).toLocaleString('en-IN')}</div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[220px]">
-            <SearchIcon size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-10 py-3 text-sm outline-none" placeholder="Search report" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="min-w-[220px] flex-1">
+            <SearchField value={search} onChange={setSearch} placeholder="Search report" className="bg-slate-50" />
           </div>
           <select className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm" value={activeReport} onChange={(e) => setActiveReport(e.target.value)}>
             {reportMeta.map((report) => <option key={report.key} value={report.key}>{report.title}</option>)}

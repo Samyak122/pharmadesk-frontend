@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, PlusCircle, PackagePlus } from 'lucide-react';
-import { Loader } from '../components/common/Loader';
+import { PlusCircle, PackagePlus } from 'lucide-react';
 import { EmptyState } from '../components/common/EmptyState';
 import { Modal } from '../components/common/Modal';
+import { SearchField } from '../components/common/SearchField';
 import { useToast } from '../components/common/ToastProvider';
 import { createInventory, createMedicine, searchMedicines } from '../services/pharmaService';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
 export function MedicinesPage() {
   const [medicines, setMedicines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [searching, setSearching] = useState(false);
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [selectedMedicine, setSelectedMedicine] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ batch_no: '', expiry_date: '', quantity: 10, unit_cost: '', selling_price: '', min_stock: 5, location: '' });
@@ -20,21 +23,36 @@ export function MedicinesPage() {
   const [customSubmitting, setCustomSubmitting] = useState(false);
   const { showToast } = useToast();
 
-  const loadMedicines = async (keyword = search) => {
+  const loadMedicines = async (keyword = debouncedSearch || 'a') => {
     try {
+      setError('');
+      setSearching(true);
       const results = await searchMedicines(keyword || 'a');
       setMedicines(results || []);
     } catch (err) {
       setError(err.response?.data?.message || 'Cannot connect to server.');
     } finally {
       setLoading(false);
+      setSearching(false);
     }
   };
 
   useEffect(() => {
-    setLoading(true);
-    loadMedicines(search);
-  }, [search]);
+    let cancelled = false;
+
+    const runSearch = async () => {
+      setLoading(true);
+      if (!cancelled) {
+        await loadMedicines(debouncedSearch || 'a');
+      }
+    };
+
+    runSearch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedSearch]);
 
   const openModal = (medicine) => {
     setSelectedMedicine(medicine);
@@ -105,8 +123,6 @@ export function MedicinesPage() {
 
   const items = useMemo(() => medicines.slice(0, 24), [medicines]);
 
-  if (loading) return <Loader label="Loading medicine catalog" />;
-
   return (
     <div className="space-y-6 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -115,15 +131,20 @@ export function MedicinesPage() {
           <p className="text-sm text-slate-500">Search the medicine master and add batches to inventory through the backend API.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input className="rounded-2xl border border-slate-200 px-10 py-3 text-sm" placeholder="Search medicines" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="min-w-[240px]">
+            <SearchField value={search} onChange={setSearch} placeholder="Search medicines" loading={searching} />
           </div>
           <button type="button" onClick={() => setCustomModalOpen(true)} className="flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">
             <PackagePlus size={16} /> Add Custom Product
           </button>
         </div>
       </div>
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+          <span>Loading catalog…</span>
+        </div>
+      ) : null}
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       {items.length ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Eye, Printer, Search, UserPlus } from 'lucide-react';
-import { Loader } from '../components/common/Loader';
+import { Download, Eye, Printer, UserPlus } from 'lucide-react';
 import { EmptyState } from '../components/common/EmptyState';
 import { Modal } from '../components/common/Modal';
 import { InvoicePreview } from '../components/common/InvoicePreview';
+import { SearchField } from '../components/common/SearchField';
 import { useToast } from '../components/common/ToastProvider';
 import { createCustomer, formatCurrency, getCustomerHistory, getInvoiceById, getSettings, listCustomers, updateCustomer, updateInvoice } from '../services/pharmaService';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { exportInvoicePdf } from '../utils/exporters';
 import { resolvePharmacyLogo } from '../utils/logoUtils';
 
@@ -135,6 +136,8 @@ export function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [searching, setSearching] = useState(false);
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [history, setHistory] = useState(null);
@@ -157,22 +160,37 @@ export function CustomersPage() {
   const [invoiceSaving, setInvoiceSaving] = useState(false);
   const { showToast } = useToast();
 
-  const loadCustomers = async () => {
+  const loadCustomers = async (term = debouncedSearch) => {
     try {
-      const [customerData, settingsData] = await Promise.all([listCustomers(search), getSettings()]);
+      setError('');
+      setSearching(true);
+      const [customerData, settingsData] = await Promise.all([listCustomers(term), getSettings()]);
       setCustomers(customerData || []);
       setSettings(settingsData || null);
     } catch (err) {
       setError(err.response?.data?.message || 'Cannot connect to server.');
     } finally {
       setLoading(false);
+      setSearching(false);
     }
   };
 
   useEffect(() => {
-    setLoading(true);
-    loadCustomers();
-  }, [search]);
+    let cancelled = false;
+
+    const runSearch = async () => {
+      setLoading(true);
+      if (!cancelled) {
+        await loadCustomers(debouncedSearch);
+      }
+    };
+
+    runSearch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedSearch]);
 
   const openCustomerModal = (customer = null) => {
     setSelectedCustomer(customer);
@@ -332,8 +350,6 @@ export function CustomersPage() {
     }
   };
 
-  if (loading) return <Loader label="Loading GenPharma customers" />;
-
   return (
     <div className="space-y-6 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -344,13 +360,21 @@ export function CustomersPage() {
         <div className="flex gap-3">
           <div className="relative">
             <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input className="rounded-2xl border border-slate-200 px-10 py-3 text-sm" placeholder="Search phone or name" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <div className="min-w-[260px]">
+              <SearchField value={search} onChange={setSearch} placeholder="Search phone or name" loading={searching} />
+            </div>
           </div>
           <button type="button" onClick={() => openCustomerModal()} className="flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">
             <UserPlus size={16} /> Add Customer
           </button>
         </div>
       </div>
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+          <span>Loading customers…</span>
+        </div>
+      ) : null}
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       {customers.length ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

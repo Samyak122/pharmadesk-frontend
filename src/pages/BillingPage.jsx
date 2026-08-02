@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search, ReceiptText, UserPlus, PlusCircle, Trash2 } from 'lucide-react';
-import { Loader } from '../components/common/Loader';
 import { EmptyState } from '../components/common/EmptyState';
 import { Modal } from '../components/common/Modal';
 import { InvoicePreview } from '../components/common/InvoicePreview';
+import { SearchField } from '../components/common/SearchField';
 import { useToast } from '../components/common/ToastProvider';
 import { createCustomer, createInvoice, getSettings, listCustomers, listInvoices, listInventory, searchCustomersByPhone, searchMedicines } from '../services/pharmaService';
 import { formatCurrency } from '../services/pharmaService';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { exportInvoicePdf } from '../utils/exporters';
 import { calculateInvoiceTotals } from '../utils/billingUtils';
 
@@ -18,10 +19,14 @@ export function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
+  const [customerSearching, setCustomerSearching] = useState(false);
+  const debouncedCustomerSearch = useDebouncedValue(customerSearch, 300);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [customerForm, setCustomerForm] = useState({ customer_name: '', phone: '', email: '', address: '' });
   const [searchTerm, setSearchTerm] = useState('');
+  const [medicineSearching, setMedicineSearching] = useState(false);
+  const debouncedMedicineSearch = useDebouncedValue(searchTerm, 300);
   const [medicineResults, setMedicineResults] = useState([]);
   const [selectedMedicine, setSelectedMedicine] = useState(null);
   const [selectedMedicineId, setSelectedMedicineId] = useState('');
@@ -102,19 +107,46 @@ export function BillingPage() {
     load();
   }, [location.key]);
 
-  const searchMedicineCatalog = async (value) => {
+  const searchMedicineCatalog = (value) => {
     setSearchTerm(value);
     if (!value) {
       setMedicineResults([]);
       return;
     }
-    try {
-      const results = await searchMedicines(value);
-      setMedicineResults(results || []);
-    } catch {
-      setMedicineResults([]);
-    }
   };
+
+  useEffect(() => {
+    if (!debouncedMedicineSearch) {
+      setMedicineResults([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const runSearch = async () => {
+      try {
+        setMedicineSearching(true);
+        const results = await searchMedicines(debouncedMedicineSearch);
+        if (!cancelled) {
+          setMedicineResults(results || []);
+        }
+      } catch {
+        if (!cancelled) {
+          setMedicineResults([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setMedicineSearching(false);
+        }
+      }
+    };
+
+    runSearch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedMedicineSearch]);
 
   const selectMedicine = async (medicineId) => {
     const medicine = medicineResults.find((item) => String(item.medicine_id) === String(medicineId)) || null;
@@ -137,24 +169,46 @@ export function BillingPage() {
     }
   };
 
-  const findCustomer = async (phone) => {
+  const findCustomer = (phone) => {
     setCustomerSearch(phone);
     if (!phone) {
       setSelectedCustomer(null);
       return;
     }
-    try {
-      const results = await searchCustomersByPhone(phone);
-      if (results.length) {
-        const matched = results[0];
-        setSelectedCustomer(matched);
-      } else {
-        setSelectedCustomer(null);
-      }
-    } catch {
-      setSelectedCustomer(null);
-    }
   };
+
+  useEffect(() => {
+    if (!debouncedCustomerSearch) {
+      setSelectedCustomer(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const runLookup = async () => {
+      try {
+        setCustomerSearching(true);
+        const results = await searchCustomersByPhone(debouncedCustomerSearch);
+        if (!cancelled) {
+          setSelectedCustomer(results.length ? results[0] : null);
+        }
+      } catch {
+        if (!cancelled) {
+          setSelectedCustomer(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setCustomerSearching(false);
+        }
+      }
+    };
+
+    runLookup();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedCustomerSearch]);
 
   const selectBatch = (batchId) => {
     const batch = availableBatches.find((item) => String(item.stock_id) === String(batchId)) || null;
@@ -333,8 +387,6 @@ export function BillingPage() {
     }
   };
 
-  if (loading) return <Loader label="Loading billing" />;
-
   if (previewVisible && previewInvoice) {
     return (
       <InvoicePreview
@@ -373,9 +425,8 @@ export function BillingPage() {
                 </button>
               </div>
               <div className="mt-4 space-y-3">
-                <div className="relative">
-                  <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input className="w-full rounded-2xl border border-slate-200 bg-white px-10 py-3 text-sm outline-none" placeholder="Search by phone" value={customerSearch} onChange={(e) => findCustomer(e.target.value)} />
+                <div className="w-full">
+                  <SearchField value={customerSearch} onChange={findCustomer} placeholder="Search by phone" loading={customerSearching} />
                 </div>
                 <select className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" value={selectedCustomer?.customer_id || ''} onChange={(e) => {
                   const customer = customers.find((item) => String(item.customer_id) === String(e.target.value));
@@ -396,9 +447,8 @@ export function BillingPage() {
                 <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Inventory-backed</div>
               </div>
               <div className="mt-4 space-y-3">
-                <div className="relative">
-                  <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input className="w-full rounded-2xl border border-slate-200 bg-white px-10 py-3 text-sm outline-none" placeholder="Search medicine" value={searchTerm} onChange={(e) => searchMedicineCatalog(e.target.value)} />
+                <div className="w-full">
+                  <SearchField value={searchTerm} onChange={searchMedicineCatalog} placeholder="Search medicine" loading={medicineSearching} />
                 </div>
                 {medicineResults.length ? (
                   <div className="rounded-2xl border border-slate-200 bg-white p-2">
