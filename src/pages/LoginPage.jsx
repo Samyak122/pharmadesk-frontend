@@ -33,10 +33,11 @@ export function LoginPage() {
           <input type="password" className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none" placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           {error ? <p className="text-sm text-rose-600">{error}</p> : null}
           <button type="submit" className="w-full rounded-2xl bg-slate-900 px-4 py-3 font-semibold text-white">Login</button>
+          <button type="button" onClick={() => setForm({ username: 'admin', password: 'admin' })} className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-semibold text-slate-700">Demo Login</button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-500">
-          New here?{' '}
-          <Link to="/signup" className="font-semibold text-slate-900">Create an account</Link>
+          Need an account?{' '}
+          <Link to="/contact" className="font-semibold text-slate-900">Contact our team.</Link>
         </p>
       </div>
     </div>

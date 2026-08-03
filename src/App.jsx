@@ -3,7 +3,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Navbar } from './components/layout/Navbar';
 import { LoginPage } from './pages/LoginPage';
-import { SignupPage } from './pages/SignupPage';
+import { LandingPage } from './pages/LandingPage';
+import { ContactPage } from './pages/ContactPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { BillingPage } from './pages/BillingPage';
 import { MedicinesPage } from './pages/MedicinesPage';
@@ -41,9 +42,9 @@ function AppRoutes() {
 
   return (
     <Routes>
+      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-      <Route path="/signup" element={user ? <Navigate to="/dashboard" replace /> : <SignupPage />} />
-      <Route path="/" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
+      <Route path="/contact" element={user ? <Navigate to="/dashboard" replace /> : <ContactPage />} />
       <Route path="/dashboard" element={<ProtectedRoute><ProtectedLayout><DashboardPage /></ProtectedLayout></ProtectedRoute>} />
       <Route path="/billing" element={<ProtectedRoute><ProtectedLayout><BillingPage /></ProtectedLayout></ProtectedRoute>} />
       <Route path="/medicines" element={<ProtectedRoute><ProtectedLayout><MedicinesPage /></ProtectedLayout></ProtectedRoute>} />
