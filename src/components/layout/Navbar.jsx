@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ChevronRight, Search, BellRing } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -17,8 +17,33 @@ export function Navbar() {
   const { user } = useAuth();
   const breadcrumb = titleFromPath(location.pathname);
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const alertsContainerRef = useRef(null);
   const [stockAlerts, setStockAlerts] = useState([]);
   const [expiryAlerts, setExpiryAlerts] = useState([]);
+
+  useEffect(() => {
+    if (!alertsOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (!alertsContainerRef.current?.contains(event.target)) {
+        setAlertsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setAlertsOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [alertsOpen]);
 
   useEffect(() => {
     let active = true;
@@ -66,7 +91,7 @@ export function Navbar() {
           <Search size={16} />
           <input className="bg-transparent outline-none" placeholder="Search" />
         </label>
-        <div className="relative">
+        <div ref={alertsContainerRef} className="relative">
           <button type="button" onClick={() => setAlertsOpen((prev) => !prev)} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm">
             <BellRing size={16} />
             Alerts
