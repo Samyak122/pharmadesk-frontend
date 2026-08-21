@@ -25,8 +25,9 @@ export function InvoicePrint({ invoice, settings }) {
   });
 
   const subtotal = rows.reduce((sum, row) => sum + Number(row.unit_price || 0) * Number(row.quantity || 0), 0);
-  const gstAmount = rows.reduce((sum, row) => sum + Number(row.gst_amount || 0), 0);
-  const totalAmount = Number((subtotal + gstAmount).toFixed(2));
+  const discountAmount = Number(invoice?.discount_amount || 0);
+  const gstAmount = Number(invoice?.gst_amount ?? rows.reduce((sum, row) => sum + Number(row.gst_amount || 0), 0));
+  const totalAmount = Number((subtotal - discountAmount + gstAmount).toFixed(2));
   const amountInWords = `${formatCurrency(totalAmount)} Only`;
 
   return (
@@ -102,6 +103,7 @@ export function InvoicePrint({ invoice, settings }) {
         <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:justify-end">
           <div className="min-w-[300px] rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
             <div className="flex items-center justify-between"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+            <div className="mt-2 flex items-center justify-between"><span>Discount</span><span>-{formatCurrency(discountAmount)}</span></div>
             <div className="mt-2 flex items-center justify-between"><span>GST</span><span>{formatCurrency(gstAmount)}</span></div>
             <div className="mt-2 flex items-center justify-between font-semibold text-slate-900"><span>Grand Total</span><span>{formatCurrency(totalAmount)}</span></div>
           </div>

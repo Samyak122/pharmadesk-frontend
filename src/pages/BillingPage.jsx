@@ -78,8 +78,9 @@ export function BillingPage() {
       ...extra,
       items,
       subtotal: Number(subtotal.toFixed(2)),
+      discount_amount: Number(invoice.discount_amount ?? extra.discount_amount ?? 0),
       gst_amount: Number(gstAmount.toFixed(2)),
-      total_amount: Number((subtotal + gstAmount).toFixed(2)),
+      total_amount: Number((subtotal - Number(invoice.discount_amount ?? extra.discount_amount ?? 0) + gstAmount).toFixed(2)),
       customer: extra.customer || invoice.customer || null,
     };
   };
@@ -322,7 +323,7 @@ export function BillingPage() {
         payment_status: payload.payment_status,
         discount_amount: Number(payload.discount_amount || 0),
         gst_percent: Number(payload.gst_percent || 0),
-        total_amount: Number((previewSubtotal + previewGstAmount).toFixed(2)),
+        total_amount: Number((previewSubtotal - Number(payload.discount_amount || 0) + previewGstAmount).toFixed(2)),
         items: previewItems,
       }, {
         customer: selectedCustomer || null,

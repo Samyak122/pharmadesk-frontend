@@ -42,8 +42,9 @@ function normalizeInvoiceForPreview(invoice, extra = {}) {
     ...extra,
     items,
     subtotal: Number(subtotal.toFixed(2)),
+    discount_amount: Number(invoice.discount_amount ?? extra.discount_amount ?? 0),
     gst_amount: Number(gstAmount.toFixed(2)),
-    total_amount: Number((subtotal + gstAmount).toFixed(2)),
+    total_amount: Number((subtotal - Number(invoice.discount_amount ?? extra.discount_amount ?? 0) + gstAmount).toFixed(2)),
     customer: extra.customer || invoice.customer || null,
   };
 }
@@ -63,8 +64,9 @@ function buildInvoicePrintHtml(invoice, settings) {
   `).join('');
 
   const subtotal = Number(invoice?.subtotal || 0);
+  const discountAmount = Number(invoice?.discount_amount || 0);
   const gstAmount = Number(invoice?.gst_amount || 0);
-  const totalAmount = Number(invoice?.total_amount || 0);
+  const totalAmount = Number((subtotal - discountAmount + gstAmount).toFixed(2));
 
   return `<!doctype html>
     <html lang="en">
@@ -118,6 +120,7 @@ function buildInvoicePrintHtml(invoice, settings) {
           <div class="totals">
             <div>
               <div style="display:flex;justify-content:space-between;margin-bottom:6px;">Subtotal <span>${formatCurrency(subtotal)}</span></div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px;">Discount <span>-${formatCurrency(discountAmount)}</span></div>
               <div style="display:flex;justify-content:space-between;margin-bottom:6px;">GST <span>${formatCurrency(gstAmount)}</span></div>
               <div style="display:flex;justify-content:space-between;font-weight:700;">Grand Total <span>${formatCurrency(totalAmount)}</span></div>
             </div>

@@ -109,9 +109,14 @@ export function exportInvoicePdf(invoice, settings = {}) {
 
   const finalY = doc.lastAutoTable.finalY + 18;
   doc.setFontSize(10);
-  doc.text(`Subtotal: ${invoice?.subtotal || 0}`, margin, finalY);
-  doc.text(`GST: ${invoice?.gst_amount || 0}`, margin + 180, finalY);
-  doc.text(`Grand Total: ${invoice?.total_amount || 0}`, margin + 360, finalY);
+  const subtotal = Number(invoice?.subtotal || 0);
+  const discountAmount = Number(invoice?.discount_amount || 0);
+  const gstAmount = Number(invoice?.gst_amount || 0);
+  const totalAmount = Number((subtotal - discountAmount + gstAmount).toFixed(2));
+  doc.text(`Subtotal: ${subtotal}`, margin, finalY);
+  doc.text(`Discount: -${discountAmount}`, margin + 135, finalY);
+  doc.text(`GST: ${gstAmount}`, margin + 270, finalY);
+  doc.text(`Grand Total: ${totalAmount}`, margin + 405, finalY);
 
   doc.setFontSize(10);
   doc.text('Thank you for your business.', margin, Math.min(pageHeight - 40, finalY + 30));
