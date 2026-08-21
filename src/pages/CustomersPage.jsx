@@ -412,8 +412,8 @@ export function CustomersPage() {
             <form onSubmit={saveCustomer} className="space-y-3">
               <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Customer name" value={customerForm.customer_name} onChange={(e) => setCustomerForm({ ...customerForm, customer_name: e.target.value })} required />
               <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Phone" value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} required />
-              <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Email" value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} />
-              <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Address" value={customerForm.address} onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })} />
+              <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Email (optional)" value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} />
+              <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Address (optional)" value={customerForm.address} onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })} />
               <button type="submit" className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Save Customer</button>
             </form>
           </div>
