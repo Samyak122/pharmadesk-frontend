@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import emailjs from '@emailjs/browser';
 import { Link } from 'react-router-dom';
 import api from '../api/client';
 
@@ -32,7 +33,7 @@ export function ContactPage() {
     setLoading(true);
 
     try {
-      await api.post('/contact', {
+      const contact = {
         pharmacyName: form.pharmacyName,
         ownerName: form.ownerName,
         phone: form.phone,
@@ -43,11 +44,31 @@ export function ContactPage() {
         state: form.state,
         currentSoftware: form.currentSoftware,
         message: form.message,
-      });
+      };
+
+      await api.post('/contact', contact);
+      await emailjs.send(
+        import.meta.env.VITE_EMAILJS_SERVICE_ID,
+        import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
+        {
+          pharmacy_name: contact.pharmacyName,
+          owner_name: contact.ownerName,
+          phone: contact.phone,
+          email: contact.email,
+          gst: contact.gst || 'Not provided',
+          license: contact.license || 'Not provided',
+          city: contact.city,
+          state: contact.state,
+          current_software: contact.currentSoftware || 'Not provided',
+          message: contact.message,
+          submitted_at: new Date().toLocaleString(),
+        },
+        import.meta.env.VITE_EMAILJS_PUBLIC_KEY,
+      );
       setSubmitted(true);
       setForm(initialState);
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to submit your request right now.');
+      setError(err.response?.data?.message || 'Unable to send your request right now. Please try again.');
     } finally {
       setLoading(false);
     }
