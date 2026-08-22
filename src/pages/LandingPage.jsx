@@ -375,8 +375,8 @@ export function LandingPage() {
               <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
                 <Link to="/contact" className="inline-flex rounded-full bg-slate-900 px-5 py-3 font-semibold text-white transition hover:bg-slate-700">Get in touch</Link>
                 <div className="mt-6 space-y-3 text-sm text-slate-600">
-                  <p>📧 support@genpharma.com</p>
-                  <p>📞 +91 98765 43210</p>
+                  <p>📧 gen.pharma.official@gmail.com</p>
+                  <p>📞 +91 7620604870</p>
                 </div>
               </div>
             </div>
@@ -401,8 +401,8 @@ export function LandingPage() {
           <div>
             <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">Support</h4>
             <ul className="mt-4 space-y-2 text-sm">
-              <li>support@genpharma.com</li>
-              <li>+91 98765 43210</li>
+              <li>gen.pharma.official@gmail.com</li>
+              <li>+91 7620604870</li>
               <li><a href="#faq" className="hover:text-white">FAQ</a></li>
             </ul>
           </div>
