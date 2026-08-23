@@ -1,4 +1,5 @@
 const today = new Date();
+const todayKey = () => new Date().toISOString().slice(0, 10);
 const dateFromToday = (days) => {
   const date = new Date(today);
   date.setDate(date.getDate() + days);
@@ -34,12 +35,12 @@ const inventory = [
 
 const invoices = [
   {
-    invoice_id: 1, invoice_no: 'INV-DEMO-001', invoice_date: dateFromToday(-2), customer_id: 1, payment_method: 'UPI', payment_status: 'Paid', gst_percent: 12, discount_amount: 0, subtotal: 256, gst_amount: 30.72, total_amount: 286.72,
-    customer: customers[0], items: [{ medicine_id: 2, medicine_name: medicines[1].medicine_name, batch_no: 'AZI2408', expiry_date: inventory[1].expiry_date, quantity: 2, unit_price: 128, gst_percent: 12, gst_amount: 30.72, line_total: 286.72 }],
+    invoice_id: 1, invoice_no: 'INV-DEMO-001', invoice_date: dateFromToday(0), customer_id: 1, payment_method: 'UPI', payment_status: 'Paid', gst_percent: 12, discount_amount: 0, subtotal: 256, gst_amount: 30.72, total_amount: 286.72,
+    customer: customers[0], items: [{ medicine_id: 2, stock_id: 2, medicine_name: medicines[1].medicine_name, batch_no: 'AZI2408', expiry_date: inventory[1].expiry_date, quantity: 2, unit_price: 128, cost_price: 92, gst_percent: 12, gst_amount: 30.72, line_total: 286.72 }],
   },
   {
     invoice_id: 2, invoice_no: 'INV-DEMO-002', invoice_date: dateFromToday(-6), customer_id: 2, payment_method: 'Cash', payment_status: 'Paid', gst_percent: 18, discount_amount: 0, subtotal: 330, gst_amount: 59.4, total_amount: 389.4,
-    customer: customers[1], items: [{ medicine_id: 1, medicine_name: medicines[0].medicine_name, batch_no: 'HFW2401', expiry_date: inventory[0].expiry_date, quantity: 2, unit_price: 165, gst_percent: 18, gst_amount: 59.4, line_total: 389.4 }],
+    customer: customers[1], items: [{ medicine_id: 1, stock_id: 1, medicine_name: medicines[0].medicine_name, batch_no: 'HFW2401', expiry_date: inventory[0].expiry_date, quantity: 2, unit_price: 165, cost_price: 115, gst_percent: 18, gst_amount: 59.4, line_total: 389.4 }],
   },
 ];
 
@@ -74,10 +75,12 @@ export function enrichInventory() {
 }
 
 export function demoSummary() {
-  const revenue = state.invoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
-  const cost = state.invoices.reduce((sum, invoice) => sum + (invoice.items || []).reduce((itemSum, item) => itemSum + Number(item.quantity || 0) * Number(state.inventory.find((batch) => batch.medicine_id === item.medicine_id)?.unit_cost || 0), 0), 0);
+  const todayInvoices = state.invoices.filter((invoice) => invoice.invoice_date === todayKey());
+  const revenue = todayInvoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0);
+  const gst = todayInvoices.reduce((sum, invoice) => sum + Number(invoice.gst_amount || 0), 0);
+  const cost = todayInvoices.reduce((sum, invoice) => sum + (invoice.items || []).reduce((itemSum, item) => itemSum + Number(item.quantity || 0) * Number(item.cost_price || state.inventory.find((batch) => batch.stock_id === item.stock_id)?.unit_cost || 0), 0), 0);
   const topSellingMedicines = state.medicines.map((medicine) => ({ medicine_name: medicine.medicine_name, total_qty: state.invoices.reduce((sum, invoice) => sum + (invoice.items || []).filter((item) => item.medicine_id === medicine.medicine_id).reduce((itemSum, item) => itemSum + Number(item.quantity || 0), 0), 0) })).filter((item) => item.total_qty > 0);
-  return { todaySales: revenue, todayProfit: revenue - cost, monthlyRevenue: revenue, billsToday: state.invoices.length, totalMedicines: state.medicines.length, lowStockMedicines: enrichInventory().filter((item) => item.isLowStock).length, expiredMedicines: enrichInventory().filter((item) => item.isExpired).length, expiringInSevenDays: enrichInventory().filter((item) => item.daysToExpiry >= 0 && item.daysToExpiry <= 7).length, topSellingMedicines };
+  return { todaySales: Number(revenue.toFixed(2)), todayProfit: Number((revenue - gst - cost).toFixed(2)), monthlyRevenue: state.invoices.reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0), billsToday: todayInvoices.length, totalMedicines: state.medicines.length, lowStockMedicines: enrichInventory().filter((item) => item.isLowStock).length, expiredMedicines: enrichInventory().filter((item) => item.isExpired).length, expiringInSevenDays: enrichInventory().filter((item) => item.daysToExpiry >= 0 && item.daysToExpiry <= 7).length, topSellingMedicines };
 }
 
 export function demoReports() {
@@ -93,13 +96,14 @@ export function createDemoInvoice(payload) {
     const batch = state.inventory.find((entry) => entry.medicine_id === Number(item.medicine_id) && entry.quantity >= Number(item.quantity));
     const gstPercent = Number(payload.gst_percent || medicine?.gst_percent || 0);
     const unitPrice = Number(item.unit_price || batch?.selling_price || 0);
-    const gstAmount = Number(((unitPrice * Number(item.quantity || 0) * gstPercent) / 100).toFixed(2));
+    const costPrice = Number(item.cost_price || batch?.unit_cost || 0);
     if (batch) batch.quantity -= Number(item.quantity || 0);
-    return { ...item, medicine_id: Number(item.medicine_id), medicine_name: medicine?.medicine_name, batch_no: batch?.batch_no || 'DEMO-BATCH', expiry_date: batch?.expiry_date || dateFromToday(180), unit_price: unitPrice, gst_percent: gstPercent, gst_amount: gstAmount, line_total: Number((unitPrice * Number(item.quantity || 0) + gstAmount).toFixed(2)) };
+    return { ...item, medicine_id: Number(item.medicine_id), stock_id: batch?.stock_id, medicine_name: medicine?.medicine_name, batch_no: batch?.batch_no || 'DEMO-BATCH', expiry_date: batch?.expiry_date || dateFromToday(180), unit_price: unitPrice, cost_price: costPrice, gst_percent: gstPercent };
   });
   const subtotal = items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
-  const gstAmount = items.reduce((sum, item) => sum + item.gst_amount, 0);
-  const invoice = { invoice_id: Date.now(), invoice_no: payload.invoice_no, invoice_date: payload.invoice_date, customer_id: payload.customer_id, customer, payment_method: payload.payment_method, payment_status: payload.payment_status, gst_percent: payload.gst_percent, discount_amount: Number(payload.discount_amount || 0), subtotal, gst_amount: gstAmount, total_amount: Number((subtotal - Number(payload.discount_amount || 0) + gstAmount).toFixed(2)), items };
+  const discountAmount = Number(payload.discount_amount || 0);
+  const gstAmount = Number(((Math.max(0, subtotal - discountAmount) * Number(payload.gst_percent || 0)) / 100).toFixed(2));
+  const invoice = { invoice_id: Date.now(), invoice_no: payload.invoice_no, invoice_date: payload.invoice_date, customer_id: payload.customer_id, customer, payment_method: payload.payment_method, payment_status: payload.payment_status, gst_percent: payload.gst_percent, discount_amount: discountAmount, subtotal, gst_amount: gstAmount, total_amount: Number((subtotal - discountAmount + gstAmount).toFixed(2)), items };
   state.invoices.unshift(invoice);
   return { data: { invoice } };
 }
