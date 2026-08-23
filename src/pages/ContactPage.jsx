@@ -95,8 +95,8 @@ export function ContactPage() {
               Share your pharmacy details and our team will reach out with the right solution for your billing and operations needs.
             </p>
             <div className="mt-8 space-y-4 text-sm text-slate-300">
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-4">📧 support@genpharma.com</div>
-              <div className="rounded-2xl border border-white/10 bg-white/10 p-4">📞 +91 98765 43210</div>
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-4">📧 gen.pharma.official@gmail.com</div>
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-4">📞 +91 7620604870</div>
             </div>
           </div>
 
