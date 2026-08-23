@@ -16,7 +16,7 @@ const links = [
 ];
 
 export function Sidebar() {
-  const { user, logout } = useAuth();
+  const { user, isDemoMode, logout } = useAuth();
 
   return (
     <aside className="flex h-screen w-72 flex-col border-r border-slate-200 bg-white/80 px-6 py-6 shadow-sm backdrop-blur">
@@ -51,15 +51,15 @@ export function Sidebar() {
             <UserCircle2 size={18} className="text-slate-500" />
             <div>
               <p className="text-sm font-semibold text-slate-800">{user?.username || 'User'}</p>
-              <p className="text-xs text-slate-500">{user?.role || 'Role'}</p>
+              <p className={`text-xs font-semibold ${isDemoMode ? 'text-emerald-600' : 'text-slate-500'}`}>{isDemoMode ? 'Demo Mode' : (user?.role || 'Role')}</p>
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
             <div className="flex items-center gap-2">
               <Circle size={8} fill="currentColor" className="text-emerald-500" />
-              Backend Status
+              {isDemoMode ? 'Demo Status' : 'Backend Status'}
             </div>
-            <span className="font-semibold text-emerald-600">Online</span>
+            <span className="font-semibold text-emerald-600">{isDemoMode ? 'Local' : 'Online'}</span>
           </div>
         </div>
 
@@ -72,7 +72,7 @@ export function Sidebar() {
         </button>
         <div className="border-t border-slate-200 pt-4 text-xs text-slate-500">
           <p>Version 1.0.0</p>
-          <p className="mt-1">Backend • Connected</p>
+          <p className="mt-1">{isDemoMode ? 'Demo • In memory only' : 'Backend • Connected'}</p>
         </div>
       </div>
     </aside>

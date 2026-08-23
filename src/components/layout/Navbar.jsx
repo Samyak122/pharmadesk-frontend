@@ -14,7 +14,7 @@ function titleFromPath(pathname) {
 export function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isDemoMode } = useAuth();
   const breadcrumb = titleFromPath(location.pathname);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const alertsContainerRef = useRef(null);
@@ -132,7 +132,7 @@ export function Navbar() {
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-800">{user?.username || 'User'}</p>
-            <p className="text-xs text-slate-500">{user?.role || 'Role'}</p>
+            <p className={`text-xs font-semibold ${isDemoMode ? 'text-emerald-600' : 'text-slate-500'}`}>{isDemoMode ? 'Demo Mode' : (user?.role || 'Role')}</p>
           </div>
         </div>
       </div>

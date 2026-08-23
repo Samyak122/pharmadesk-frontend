@@ -7,7 +7,7 @@ export function LoginPage() {
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, enterDemoMode } = useAuth();
 
   const submit = async (event) => {
     event.preventDefault();
@@ -18,6 +18,12 @@ export function LoginPage() {
     } catch (err) {
       setError(err.response?.data?.message || 'Unable to sign in.');
     }
+  };
+
+  const startDemo = () => {
+    setError('');
+    enterDemoMode();
+    navigate('/dashboard');
   };
 
   return (
@@ -33,7 +39,7 @@ export function LoginPage() {
           <input type="password" className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none" placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           {error ? <p className="text-sm text-rose-600">{error}</p> : null}
           <button type="submit" className="w-full rounded-2xl bg-slate-900 px-4 py-3 font-semibold text-white">Login</button>
-          <button type="button" onClick={() => setForm({ username: 'admin', password: 'admin' })} className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-semibold text-slate-700">Demo Login</button>
+          <button type="button" onClick={startDemo} className="w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-semibold text-emerald-700">Demo Login</button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-500">
           Need an account?{' '}
