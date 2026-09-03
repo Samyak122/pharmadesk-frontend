@@ -144,9 +144,13 @@ export function PurchasesPage() {
 
     image.onload = () => {
       const maxDimension = 2200;
-      const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
-      const width = Math.max(1, Math.round(image.naturalWidth * scale));
-      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const cropX = Math.round(image.naturalWidth * 0.02);
+      const cropY = Math.round(image.naturalHeight * 0.02);
+      const sourceWidth = Math.max(1, image.naturalWidth - cropX * 2);
+      const sourceHeight = Math.max(1, image.naturalHeight - cropY * 2);
+      const scale = Math.min(2, maxDimension / Math.max(sourceWidth, sourceHeight));
+      const width = Math.max(1, Math.round(sourceWidth * scale));
+      const height = Math.max(1, Math.round(sourceHeight * scale));
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
 
@@ -163,7 +167,7 @@ export function PurchasesPage() {
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.translate(canvas.width / 2, canvas.height / 2);
       context.rotate((rotationDegrees * Math.PI) / 180);
-      context.drawImage(image, -width / 2, -height / 2, width, height);
+      context.drawImage(image, cropX, cropY, sourceWidth, sourceHeight, -width / 2, -height / 2, width, height);
 
       const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
       const { data } = imageData;
@@ -251,7 +255,7 @@ export function PurchasesPage() {
       setOcrStatus('Extracting medicine details...');
       setOcrProgress(100);
 
-      const extracted = extractSupplierInvoiceData(extractedText, medicineResults);
+      const extracted = extractSupplierInvoiceData(result?.data || extractedText, medicineResults);
       if (!extracted?.items?.length) {
         setOcrError(extracted?.warning || 'No medicine rows could be confidently extracted from this bill. Please retake the photo with the entire invoice clearly visible.');
         setOcrResult(extracted || null);
@@ -265,15 +269,17 @@ export function PurchasesPage() {
         medicine_name: row.medicine_name || '',
         batch_number: row.batch_number || '',
         expiry_date: row.expiry_date || '',
-        quantity: Number(row.quantity || 0),
-        free_quantity: Number(row.free_quantity || 0),
-        mrp: Number(row.mrp || 0),
-        purchase_rate: Number(row.purchase_rate || 0),
-        gst_percentage: Number(row.gst_percentage || 0),
+        quantity: row.quantity ?? '',
+        free_quantity: row.free_quantity ?? '',
+        mrp: row.mrp ?? '',
+        purchase_rate: row.purchase_rate ?? '',
+        gst_percentage: row.gst_percentage ?? '',
         hsn: row.hsn || '',
+        amount: row.amount ?? '',
         status: row.validation?.valid ? 'Ready' : 'Needs review',
         warnings: row.validation?.message || 'Review required',
         validation: row.validation,
+        confidence: row.confidence,
       })));
     } catch (err) {
       setOcrError(err.response?.data?.message || err.message || 'OCR failed. Please use a clearer supplier invoice image.');
@@ -333,6 +339,7 @@ export function PurchasesPage() {
         purchase_rate: 0,
         gst_percentage: 0,
         hsn: '',
+        amount: '',
         status: 'Needs review',
         warnings: 'New row: complete the medicine details before import.',
       },
@@ -587,6 +594,7 @@ export function PurchasesPage() {
                     <th className="px-2 py-2">Rate</th>
                     <th className="px-2 py-2">GST</th>
                     <th className="px-2 py-2">HSN</th>
+                    <th className="px-2 py-2">Amount</th>
                     <th className="px-2 py-2">Status</th>
                     <th className="px-2 py-2">Action</th>
                   </tr>
@@ -595,6 +603,8 @@ export function PurchasesPage() {
                   {ocrRows.map((row, index) => {
                     const hasIssues = row.validation?.valid === false || row.warnings?.length;
                     const isMissing = !row.medicine_name || !row.batch_number || !row.expiry_date;
+                    const confidenceValues = Object.values(row.confidence || {}).map((field) => Number(field.confidence || 0)).filter(Boolean);
+                    const averageConfidence = confidenceValues.length ? Math.round((confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length) * 100) : 0;
 
                     return (
                       <tr key={row.id || `${row.medicine_name || 'row'}-${index}`} className={`border-t border-slate-200 ${hasIssues ? 'bg-amber-50/40' : 'bg-white'}`}>
@@ -617,9 +627,10 @@ export function PurchasesPage() {
                         <td className="px-2 py-2"><input type="number" value={row.purchase_rate || 0} onChange={(event) => updateOcrRow(index, 'purchase_rate', Number(event.target.value || 0))} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2"><input type="number" value={row.gst_percentage || 0} onChange={(event) => updateOcrRow(index, 'gst_percentage', Number(event.target.value || 0))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2"><input value={row.hsn || ''} onChange={(event) => updateOcrRow(index, 'hsn', event.target.value)} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input type="number" value={row.amount ?? ''} onChange={(event) => updateOcrRow(index, 'amount', event.target.value === '' ? '' : Number(event.target.value))} className="w-20 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2">
-                          <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-medium ${row.status === 'Ready' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                            {row.status || 'Needs review'}
+                          <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-medium ${row.status === 'Ready' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`} title={row.warnings || ''}>
+                            {row.status === 'Ready' ? `High confidence (${averageConfidence}%)` : averageConfidence ? `Needs verification (${averageConfidence}%)` : 'Not detected'}
                           </span>
                         </td>
                         <td className="px-2 py-2">
