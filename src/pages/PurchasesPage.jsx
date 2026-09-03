@@ -6,7 +6,8 @@ import { Modal } from '../components/common/Modal';
 import { SearchField } from '../components/common/SearchField';
 import { useToast } from '../components/common/ToastProvider';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { confirmSupplierInvoice, createPurchase, extractSupplierInvoice, getSuppliers, listPurchases, searchMedicines } from '../services/pharmaService';
+import { confirmSupplierInvoice, createPurchase, getSuppliers, listPurchases, searchMedicines } from '../services/pharmaService';
+import { extractSupplierInvoiceData } from '../services/supplierInvoiceParser';
 import { formatCurrency } from '../services/pharmaService';
 
 const OCR_ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -35,6 +36,7 @@ export function PurchasesPage() {
   const [ocrResult, setOcrResult] = useState(null);
   const [ocrRows, setOcrRows] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
+  const ocrWorkerRef = useRef(null);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -54,13 +56,21 @@ export function PurchasesPage() {
 
   useEffect(() => {
     return () => {
+      terminateOcrWorker();
       if (ocrSelectedImage?.previewUrl) {
         URL.revokeObjectURL(ocrSelectedImage.previewUrl);
       }
     };
   }, [ocrSelectedImage]);
 
+  const terminateOcrWorker = () => {
+    const worker = ocrWorkerRef.current;
+    ocrWorkerRef.current = null;
+    return worker?.terminate();
+  };
+
   const resetOcrState = () => {
+    terminateOcrWorker();
     setOcrSelectedImage(null);
     setOcrRotation(0);
     setOcrLoading(false);
@@ -215,7 +225,7 @@ export function PurchasesPage() {
       const processedImage = await prepareImageForOcr(ocrSelectedImage.file, ocrRotation);
       setOcrStatus('Reading invoice...');
 
-      const worker = await Tesseract.recognize(processedImage, 'eng', {
+      const worker = await Tesseract.createWorker('eng', 1, {
         logger: (message) => {
           if (!message) return;
           if (message.status === 'preparing image') {
@@ -230,8 +240,10 @@ export function PurchasesPage() {
           }
         },
       });
+      ocrWorkerRef.current = worker;
+      const result = await worker.recognize(processedImage);
 
-      const extractedText = worker?.data?.text || '';
+      const extractedText = result?.data?.text || '';
       if (!extractedText.trim()) {
         throw new Error('No readable text was detected. Please retake the photo with the full invoice clearly visible.');
       }
@@ -239,7 +251,7 @@ export function PurchasesPage() {
       setOcrStatus('Extracting medicine details...');
       setOcrProgress(100);
 
-      const extracted = await extractSupplierInvoice({ image_text: extractedText });
+      const extracted = extractSupplierInvoiceData(extractedText, medicineResults);
       if (!extracted?.items?.length) {
         setOcrError(extracted?.warning || 'No medicine rows could be confidently extracted from this bill. Please retake the photo with the entire invoice clearly visible.');
         setOcrResult(extracted || null);
@@ -268,6 +280,7 @@ export function PurchasesPage() {
       setOcrResult(null);
       setOcrRows([]);
     } finally {
+      await terminateOcrWorker();
       setOcrLoading(false);
       setOcrStatus('');
     }

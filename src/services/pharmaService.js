@@ -111,32 +111,6 @@ export async function createPurchase(payload) {
   return data;
 }
 
-export async function extractSupplierInvoice(payload) {
-  if (demo()) {
-    return demoResult({
-      supplier: { name: 'Demo Supplier', gstin: '27AABCM1234C1Z5', invoice_number: 'INV-DEM-101', invoice_date: '2026-08-15' },
-      items: [
-        {
-          medicine_name: 'PED COFOL Drops',
-          batch_number: 'G226F003',
-          expiry_date: '2027-11',
-          quantity: 2,
-          mrp: 184,
-          purchase_rate: 70,
-          gst_percentage: 5,
-          hsn: '3004',
-          validation: { valid: true, message: 'Row passed validation.' },
-          confidence: { medicine_name: { value: 'PED COFOL Drops', confidence: 0.96 } },
-        },
-      ],
-      quality_ok: true,
-      warning: '',
-    });
-  }
-  const { data } = await api.post('/ocr/extract', payload);
-  return data;
-}
-
 export async function confirmSupplierInvoice(payload) {
   if (demo()) {
     return demoResult({
