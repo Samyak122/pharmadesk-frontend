@@ -42,4 +42,33 @@ describe('format-independent supplier invoice parser', () => {
     expect(result.items[0]).toMatchObject({ hsn: '3004', medicine_name: 'PARACETAMOL', batch_number: 'P-77', quantity: 2, mrp: 50, purchase_rate: 35, expiry_date: '12-28', gst_percentage: '' });
     expect(result.supplier.gstin).toBe('');
   });
+
+  it('recovers medicine matches from common OCR substitutions', () => {
+    const result = extractSupplierInvoiceData(ocr([
+      [word('Drug', 10), word('Qty', 180), word('MRP', 250), word('Rate', 320)],
+      [word('HEXID1NE', 10, 130), word('LIQ', 90, 130), word('80ML', 125, 130), word('2', 180, 130), word('81', 250, 130), word('62', 320, 130)],
+    ]), [{ medicine_name: 'HEXIDINE LIQ (80ML)' }]);
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].possible_match).toBe('HEXIDINE LIQ (80ML)');
+    expect(result.items[0].batch_number).toBe('');
+  });
+
+  it('keeps multiple rows when batch and expiry differ', () => {
+    const result = extractSupplierInvoiceData(ocr([
+      [word('Product', 10), word('Batch', 150), word('Exp', 240), word('Qty', 330), word('Rate', 410)],
+      [word('VITCOFOL', 10, 130), word('A1', 150, 130), word('08/2027', 240, 130), word('2', 330, 130), word('70', 410, 130)],
+      [word('VITCOFOL', 10, 160), word('A2', 150, 160), word('09/2027', 240, 160), word('4', 330, 160), word('68', 410, 160)],
+    ]));
+
+    expect(result.items).toHaveLength(2);
+    expect(result.items.map((item) => item.batch_number)).toEqual(['A1', 'A2']);
+  });
+
+  it('does not accept arbitrary text as a GSTIN', () => {
+    const result = extractSupplierInvoiceData('Supplier text 123456789012345 and GST number unavailable', []);
+
+    expect(result.supplier.gstin).toBe('');
+    expect(result.supplier.gstin_candidates).toEqual([]);
+  });
 });

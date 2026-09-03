@@ -34,6 +34,7 @@ export function PurchasesPage() {
   const [ocrStatus, setOcrStatus] = useState('');
   const [ocrError, setOcrError] = useState('');
   const [ocrResult, setOcrResult] = useState(null);
+  const [ocrDebug, setOcrDebug] = useState(null);
   const [ocrRows, setOcrRows] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const ocrWorkerRef = useRef(null);
@@ -78,6 +79,7 @@ export function PurchasesPage() {
     setOcrStatus('');
     setOcrError('');
     setOcrResult(null);
+    setOcrDebug(null);
     setOcrRows([]);
     setIsDragging(false);
   };
@@ -141,13 +143,16 @@ export function PurchasesPage() {
   const prepareImageForOcr = (file, rotationDegrees) => new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
     const image = new Image();
+    let drawSource = image;
 
-    image.onload = () => {
+    const processImage = () => {
+      const sourceWidthPixels = drawSource.width || image.naturalWidth;
+      const sourceHeightPixels = drawSource.height || image.naturalHeight;
       const maxDimension = 2200;
-      const cropX = Math.round(image.naturalWidth * 0.02);
-      const cropY = Math.round(image.naturalHeight * 0.02);
-      const sourceWidth = Math.max(1, image.naturalWidth - cropX * 2);
-      const sourceHeight = Math.max(1, image.naturalHeight - cropY * 2);
+      const cropX = Math.round(sourceWidthPixels * 0.02);
+      const cropY = Math.round(sourceHeightPixels * 0.02);
+      const sourceWidth = Math.max(1, sourceWidthPixels - cropX * 2);
+      const sourceHeight = Math.max(1, sourceHeightPixels - cropY * 2);
       const scale = Math.min(2, maxDimension / Math.max(sourceWidth, sourceHeight));
       const width = Math.max(1, Math.round(sourceWidth * scale));
       const height = Math.max(1, Math.round(sourceHeight * scale));
@@ -167,34 +172,61 @@ export function PurchasesPage() {
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.translate(canvas.width / 2, canvas.height / 2);
       context.rotate((rotationDegrees * Math.PI) / 180);
-      context.drawImage(image, cropX, cropY, sourceWidth, sourceHeight, -width / 2, -height / 2, width, height);
+      context.drawImage(drawSource, cropX, cropY, sourceWidth, sourceHeight, -width / 2, -height / 2, width, height);
 
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-      const { data } = imageData;
-
-      for (let index = 0; index < data.length; index += 4) {
-        const r = data[index];
-        const g = data[index + 1];
-        const b = data[index + 2];
-        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-        const adjusted = gray > 127 ? (gray - 127) * 1.45 + 127 : (gray - 127) * 0.75 + 127;
-        const threshold = adjusted > 160 ? 255 : 0;
-        data[index] = threshold;
-        data[index + 1] = threshold;
-        data[index + 2] = threshold;
-      }
-
-      context.putImageData(imageData, 0, 0);
       URL.revokeObjectURL(objectUrl);
-      resolve(canvas.toDataURL('image/png'));
+      drawSource.close?.();
+      const original = canvas.toDataURL('image/png');
+      const grayscaleCanvas = document.createElement('canvas');
+      grayscaleCanvas.width = canvas.width;
+      grayscaleCanvas.height = canvas.height;
+      const grayscaleContext = grayscaleCanvas.getContext('2d');
+      grayscaleContext.drawImage(canvas, 0, 0);
+      const grayscaleData = grayscaleContext.getImageData(0, 0, canvas.width, canvas.height);
+      for (let index = 0; index < grayscaleData.data.length; index += 4) {
+        const gray = 0.299 * grayscaleData.data[index] + 0.587 * grayscaleData.data[index + 1] + 0.114 * grayscaleData.data[index + 2];
+        grayscaleData.data[index] = gray;
+        grayscaleData.data[index + 1] = gray;
+        grayscaleData.data[index + 2] = gray;
+      }
+      grayscaleContext.putImageData(grayscaleData, 0, 0);
+
+      const thresholdCanvas = document.createElement('canvas');
+      thresholdCanvas.width = canvas.width;
+      thresholdCanvas.height = canvas.height;
+      const thresholdContext = thresholdCanvas.getContext('2d');
+      thresholdContext.drawImage(grayscaleCanvas, 0, 0);
+      const thresholdData = thresholdContext.getImageData(0, 0, canvas.width, canvas.height);
+      for (let index = 0; index < thresholdData.data.length; index += 4) {
+        const adjusted = thresholdData.data[index] > 127 ? (thresholdData.data[index] - 127) * 1.45 + 127 : (thresholdData.data[index] - 127) * 0.75 + 127;
+        const threshold = adjusted > 160 ? 255 : 0;
+        thresholdData.data[index] = threshold;
+        thresholdData.data[index + 1] = threshold;
+        thresholdData.data[index + 2] = threshold;
+      }
+      thresholdContext.putImageData(thresholdData, 0, 0);
+      resolve([original, grayscaleCanvas.toDataURL('image/png'), thresholdCanvas.toDataURL('image/png')]);
     };
+
+    image.onload = processImage;
 
     image.onerror = () => {
       URL.revokeObjectURL(objectUrl);
       reject(new Error('Unable to read the selected invoice image. Please try another file.'));
     };
 
-    image.src = objectUrl;
+    if (typeof createImageBitmap === 'function') {
+      createImageBitmap(file, { imageOrientation: 'from-image' })
+        .then((bitmap) => {
+          drawSource = bitmap;
+          processImage();
+        })
+        .catch(() => {
+          image.src = objectUrl;
+        });
+    } else {
+      image.src = objectUrl;
+    }
   });
 
   const handleSelectedFile = (file) => {
@@ -226,9 +258,6 @@ export function PurchasesPage() {
       setOcrResult(null);
       setOcrStatus('Preparing image...');
 
-      const processedImage = await prepareImageForOcr(ocrSelectedImage.file, ocrRotation);
-      setOcrStatus('Reading invoice...');
-
       const worker = await Tesseract.createWorker('eng', 1, {
         logger: (message) => {
           if (!message) return;
@@ -245,8 +274,25 @@ export function PurchasesPage() {
         },
       });
       ocrWorkerRef.current = worker;
-      const result = await worker.recognize(processedImage);
+      const imageVariants = await prepareImageForOcr(ocrSelectedImage.file, ocrRotation);
+      const passes = [
+        { name: 'Reading invoice...', psm: 6 },
+        { name: 'Reading table...', psm: 4 },
+        { name: 'Reading sparse text...', psm: 11 },
+      ];
+      const results = [];
+      for (let passIndex = 0; passIndex < passes.length; passIndex += 1) {
+        const pass = passes[passIndex];
+        setOcrStatus(`${pass.name} (${passIndex + 1}/${passes.length})`);
+        await worker.setParameters({ tessedit_pageseg_mode: String(pass.psm) });
+        const result = await worker.recognize(imageVariants[passIndex % imageVariants.length], { rotateAuto: true });
+        results.push(result);
+      }
 
+      const bestResult = results
+        .map((result) => ({ result, extracted: extractSupplierInvoiceData(result?.data || '', medicineResults) }))
+        .sort((left, right) => (right.extracted.items.length * 10 + Number(right.result?.data?.confidence || 0)) - (left.extracted.items.length * 10 + Number(left.result?.data?.confidence || 0)))[0];
+      const result = bestResult?.result;
       const extractedText = result?.data?.text || '';
       if (!extractedText.trim()) {
         throw new Error('No readable text was detected. Please retake the photo with the full invoice clearly visible.');
@@ -255,7 +301,7 @@ export function PurchasesPage() {
       setOcrStatus('Extracting medicine details...');
       setOcrProgress(100);
 
-      const extracted = extractSupplierInvoiceData(result?.data || extractedText, medicineResults);
+      const extracted = bestResult?.extracted || extractSupplierInvoiceData(result?.data || extractedText, medicineResults);
       if (!extracted?.items?.length) {
         setOcrError(extracted?.warning || 'No medicine rows could be confidently extracted from this bill. Please retake the photo with the entire invoice clearly visible.');
         setOcrResult(extracted || null);
@@ -264,6 +310,7 @@ export function PurchasesPage() {
       }
 
       setOcrResult(extracted);
+      setOcrDebug(extracted.debug || null);
       setOcrRows(extracted.items.map((row, index) => ({
         id: `${row.medicine_name || 'row'}-${index}-${Date.now()}`,
         medicine_name: row.medicine_name || '',
@@ -580,6 +627,19 @@ export function PurchasesPage() {
             </div>
 
             {ocrResult?.warning ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">{ocrResult.warning}</div> : null}
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <label className="block text-xs uppercase tracking-[0.08em] text-slate-400" htmlFor="ocr-gstin">GSTIN</label>
+              <input id="ocr-gstin" value={ocrResult?.supplier?.gstin || ''} placeholder="Not detected" onChange={(event) => setOcrResult((previous) => ({ ...previous, supplier: { ...previous.supplier, gstin: event.target.value.toUpperCase() } }))} className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm" />
+              <p className="mt-1 text-xs text-slate-500">{ocrResult?.supplier?.gstin ? (ocrResult.supplier.gstin_confidence < 0.8 ? 'Verify GSTIN' : 'GSTIN detected') : 'Not detected'}</p>
+            </div>
+
+            {import.meta.env.DEV && ocrDebug ? (
+              <details className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3 text-xs text-slate-600">
+                <summary className="cursor-pointer font-semibold">OCR diagnostics</summary>
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap">{JSON.stringify(ocrDebug, null, 2)}</pre>
+              </details>
+            ) : null}
 
             <div className="overflow-x-auto rounded-2xl border border-slate-200">
               <table className="min-w-[1100px] w-full text-left text-xs">

@@ -1,11 +1,12 @@
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.75;
 
 const ALIASES = {
-  medicine_name: ['product', 'product description', 'description', 'item', 'item name', 'medicine', 'particulars'],
+  medicine_name: ['product', 'product description', 'description', 'item', 'item name', 'medicine', 'particulars', 'drug'],
+  manufacturer: ['mfg', 'manufacturer', 'maker'],
   batch_number: ['batch', 'batch no', 'batch number', 'lot', 'lot no', 'lot number'],
   expiry_date: ['exp', 'expiry', 'exp date', 'expiry date', 'exp dt'],
   quantity: ['qty', 'quantity', 'units', 'nos', 'no'],
-  free_quantity: ['free', 'free qty', 'bonus', 'scheme'],
+  free_quantity: ['free', 'free qty', 'f qty', 'fqty', 'bonus', 'scheme'],
   mrp: ['mrp', 'm r p', 'maximum retail price'],
   purchase_rate: ['rate', 'purchase rate', 'ptr', 'cost', 'basic rate'],
   pack: ['pack', 'packing', 'size'],
@@ -32,6 +33,14 @@ function normalizeExpiry(value) {
   const fullDate = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/) || text.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
   if (fullDate) return `${fullDate[1].length === 4 ? fullDate[1] : fullDate[3]}-${String(fullDate[1].length === 4 ? fullDate[2] : fullDate[1]).padStart(2, '0')}-${String(fullDate[1].length === 4 ? fullDate[3] : fullDate[2]).padStart(2, '0')}`;
   return text;
+}
+
+function normalizeGstinCandidate(value) {
+  const candidate = clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (candidate.length !== 15) return '';
+  const substitutions = { '0': 'O', '1': 'I', '5': 'S', '8': 'B', '2': 'Z' };
+  const corrected = candidate.split('').map((character, index) => (index >= 2 && index <= 6 && substitutions[character]) ? substitutions[character] : character).join('');
+  return /^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]Z[A-Z0-9]$/.test(corrected) ? corrected : '';
 }
 
 function box(word) {
@@ -95,14 +104,16 @@ function cellValue(field, words) {
 
 function parseWithHeader(lines, header) {
   const columns = [...header.columns].sort((a, b) => a.x - b.x);
-  return lines.slice(header.index + 1).filter((line) => !isTotal(line.text) && line.words.filter((word) => /\d/.test(word.text)).length >= 2).map((line) => {
+  return lines.slice(header.index + 1).filter((line) => !isTotal(line.text) && line.words.filter((word) => /\d/.test(word.text)).length >= 1).map((line) => {
     const cells = Object.fromEntries(columns.map((column) => [column.field, []]));
     line.words.forEach((word) => {
       const x = (word.bbox.left + word.bbox.right) / 2;
-      const nearest = columns.reduce((current, column) => Math.abs(column.x - x) < Math.abs(current.x - x) ? column : current, columns[0]);
+      let nearest = columns.reduce((current, column) => Math.abs(column.x - x) < Math.abs(current.x - x) ? column : current, columns[0]);
+      const productColumn = columns.find((column) => column.field === 'medicine_name');
+      if (productColumn && /[A-Za-z]/.test(word.text) && ['quantity', 'free_quantity', 'mrp', 'purchase_rate', 'gst_percentage', 'amount'].includes(nearest.field)) nearest = productColumn;
       cells[nearest.field].push(word);
     });
-    const row = { medicine_name: '', batch_number: '', expiry_date: '', quantity: '', free_quantity: '', mrp: '', purchase_rate: '', gst_percentage: '', hsn: '', amount: '', pack: '' };
+    const row = { medicine_name: '', manufacturer: '', batch_number: '', expiry_date: '', quantity: '', free_quantity: '', mrp: '', purchase_rate: '', gst_percentage: '', hsn: '', amount: '', pack: '' };
     Object.entries(cells).forEach(([field, words]) => { row[field] = cellValue(field, words); });
     if (!row.purchase_rate && cells.sale_rate) row.purchase_rate = cellValue('purchase_rate', cells.sale_rate);
     return { ...row, source: line };
@@ -138,20 +149,37 @@ function similarity(left, right) {
   return 1 - costs[b.length] / Math.max(a.length, b.length);
 }
 
+function ocrNameVariant(value) {
+  return normalizeName(value).toUpperCase().replace(/[01582]/g, (character) => ({ 0: 'O', 1: 'I', 5: 'S', 8: 'B', 2: 'Z' }[character]));
+}
+
+function bestNameSimilarity(left, right) {
+  return Math.max(similarity(left, right), similarity(ocrNameVariant(left), right));
+}
+
 export function findMedicineMatch(name, catalog = []) {
-  const best = catalog.reduce((current, item) => { const score = similarity(name, item?.medicine_name || ''); return score > (current?.score || 0) ? { score, medicine_name: item.medicine_name } : current; }, null);
+  const best = catalog.reduce((current, item) => { const score = bestNameSimilarity(name, item?.medicine_name || ''); return score > (current?.score || 0) ? { score, medicine_name: item.medicine_name } : current; }, null);
   return !best || best.score < 0.72 ? { matched: false, suggestion: '', similarity: best?.score || 0 } : { matched: true, suggestion: best.medicine_name, similarity: Number(best.score.toFixed(3)) };
+}
+
+function parseCatalogRows(lines, catalog) {
+  return lines.filter((line) => !isTotal(line.text)).flatMap((line) => {
+    const matchedName = catalog.map((item) => ({ name: item.medicine_name, score: bestNameSimilarity(line.text, item.medicine_name) })).sort((left, right) => right.score - left.score)[0];
+    const numbers = line.words.filter((word) => /^\d+(?:[,.]\d+)?$/.test(word.text.replace(/,/g, ''))).map((word) => numberFrom(word.text));
+    if (!matchedName || matchedName.score < 0.62 || numbers.length < 2) return [];
+    return [{ medicine_name: normalizeName(line.text.replace(/\d+(?:[,.]\d+)?/g, ' ')), batch_number: '', expiry_date: '', quantity: numbers[0] ?? '', free_quantity: '', mrp: numbers[1] ?? '', purchase_rate: numbers[2] ?? '', gst_percentage: numbers[3] ?? '', hsn: '', amount: '', source: line }];
+  });
 }
 
 export function extractSupplierInvoiceData(input, catalog = []) {
   const rawText = typeof input === 'string' ? input : input?.text || input?.data?.text || wordsFrom(input).map((word) => word.text).join(' ');
   const positionedLines = groupLines(typeof input === 'string' ? [] : wordsFrom(input));
   const lines = positionedLines.length ? positionedLines : String(rawText).split(/\r?\n/).map((text, index) => ({ id: index, top: index, text: clean(text), words: clean(text).split(/\s+/).map((word, wordIndex) => ({ text: word, confidence: 60, bbox: { left: wordIndex * 10, right: wordIndex * 10 + 8, top: index, bottom: index + 1 } })) }));
-  const header = detectHeader(lines); const candidates = header ? parseWithHeader(lines, header) : parseRepeatedRows(lines); const seen = new Set();
+  const header = detectHeader(lines); const repeatedRows = parseRepeatedRows(lines); const candidates = header ? parseWithHeader(lines, header) : (repeatedRows.length ? repeatedRows : parseCatalogRows(lines, catalog)); const seen = new Set();
   const items = candidates.filter((row) => { const key = `${row.medicine_name}|${row.batch_number}|${row.expiry_date}|${row.quantity}`; if (!row.medicine_name || seen.has(key)) return false; seen.add(key); return true; }).map((row) => { const validation = validate(row); const match = findMedicineMatch(row.medicine_name, catalog); const average = ((row.source?.words || []).reduce((sum, word) => sum + Number(word.confidence || 0), 0) / Math.max(1, row.source?.words?.length || 1)) / 100; const confidence = Object.fromEntries(Object.keys(row).filter((key) => key !== 'source').map((key) => [key, { value: row[key], confidence: row[key] === '' ? 0 : Math.min(0.99, average || validation.confidence) }])); return { ...row, source: undefined, validation, confidence, possible_match: match.matched ? match.suggestion : '', catalog_match: match, review_required: !validation.valid || validation.confidence < DEFAULT_CONFIDENCE_THRESHOLD }; });
-  const text = clean(rawText); const candidatesForGstin = [...text.matchAll(/\b[A-Z0-9]{15}\b/gi)].map((match) => match[0].toUpperCase()); const supplier = { name: '', gstin: text.match(/gstin\s*[:#-]?\s*([A-Z0-9]{10,20})/i)?.[1]?.toUpperCase() || '', invoice_number: text.match(/(?:invoice|bill)\s*(?:no|number)?\s*[:#-]?\s*([A-Z0-9\-/]+)/i)?.[1] || '', invoice_date: normalizeExpiry(text.match(/(?:invoice\s*)?date\s*[:#-]?\s*([0-9]{1,4}[/-][0-9]{1,4}[/-][0-9]{1,4}|[0-9]{1,2}[/-]\d{4})/i)?.[1] || '') };
-  supplier.gstin_candidates = [...new Set(candidatesForGstin)];
+  const text = clean(rawText); const candidatesForGstin = [...text.matchAll(/\b[A-Z0-9]{15}\b/gi)].map((match) => normalizeGstinCandidate(match[0])).filter(Boolean); const supplier = { name: '', gstin: candidatesForGstin[0] || '', gstin_confidence: candidatesForGstin.length ? 0.82 : 0, invoice_number: text.match(/(?:invoice|bill)\s*(?:no|number)?\s*[:#-]?\s*([A-Z0-9\-/]+)/i)?.[1] || '', invoice_date: normalizeExpiry(text.match(/(?:invoice\s*)?date\s*[:#-]?\s*([0-9]{1,4}[/-][0-9]{1,4}[/-][0-9]{1,4}|[0-9]{1,2}[/-]\d{4})/i)?.[1] || '') };
+    supplier.gstin_candidates = [...new Set(candidatesForGstin)];
   const headerLine = lines[header?.index ?? 0]; supplier.name = headerLine?.text && !/(invoice|gstin|date|product|description|item)/i.test(headerLine.text) ? headerLine.text : '';
   const qualityOk = text.length >= 40 && /[A-Za-z]/.test(text);
-  return { supplier, items, quality_ok: qualityOk, warning: qualityOk ? '' : 'Image quality is too low to reliably read the invoice. Please take a clearer photo with the complete bill clearly visible.', threshold: DEFAULT_CONFIDENCE_THRESHOLD, strategy: header ? 'table-header' : 'repeated-row' };
+  return { supplier, items, quality_ok: qualityOk, warning: qualityOk ? '' : 'Image quality is too low to reliably read the invoice. Please take a clearer photo with the complete bill clearly visible.', threshold: DEFAULT_CONFIDENCE_THRESHOLD, strategy: header ? 'table-header' : repeatedRows.length ? 'repeated-row' : 'catalog-row', debug: { headers: header?.columns || [], rows: candidates.map((row) => ({ text: row.source?.text || '', bbox: row.source?.words?.map((word) => word.bbox) || [] })) } };
 }
