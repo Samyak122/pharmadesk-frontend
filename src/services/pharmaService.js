@@ -123,6 +123,24 @@ export async function confirmSupplierInvoice(payload) {
   return data;
 }
 
+export async function extractSupplierInvoiceImage(file) {
+  if (demo()) {
+    return demoResult({
+      supplier: { name: 'Demo Supplier', gstin: '27AABCM1234C1Z5', address: 'Demo Address', phone: '9999999999' },
+      invoice: { number: 'DEMO-INV', date: '2026-08-15' },
+      items: [{ medicine: 'Demo Medicine', manufacturer: 'Demo Manufacturer', hsn: '3004', pack: '30', batch: 'D123', expiry: '2028-08-01', quantity: 10, free: 0, mrp: 150, rate: 120, gst: 5, taxable_amount: 1200, amount: 1260 }],
+      totals: { subtotal: 1200, tax: 60, grand_total: 1260 },
+    });
+  }
+
+  const formData = new FormData();
+  formData.append('invoice', file);
+  const { data } = await api.post('/ocr/extract', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
 export async function listPurchases() {
   if (demo()) return demoResult(getDemoData().purchases);
   const { data } = await api.get('/purchases');

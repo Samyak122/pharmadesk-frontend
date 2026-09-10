@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Tesseract from 'tesseract.js';
 import { Camera, CloudUpload, PlusCircle, RotateCcw, ScanText, Trash2 } from 'lucide-react';
 import { EmptyState } from '../components/common/EmptyState';
 import { Modal } from '../components/common/Modal';
 import { SearchField } from '../components/common/SearchField';
 import { useToast } from '../components/common/ToastProvider';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { confirmSupplierInvoice, createPurchase, getSuppliers, listPurchases, searchMedicines } from '../services/pharmaService';
-import { extractSupplierInvoiceData } from '../services/supplierInvoiceParser';
-import { formatCurrency } from '../services/pharmaService';
+import { confirmSupplierInvoice, createPurchase, extractSupplierInvoiceImage, getSuppliers, listPurchases, searchMedicines, formatCurrency } from '../services/pharmaService';
 
 const OCR_ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -37,7 +34,6 @@ export function PurchasesPage() {
   const [ocrDebug, setOcrDebug] = useState(null);
   const [ocrRows, setOcrRows] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
-  const ocrWorkerRef = useRef(null);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -57,21 +53,13 @@ export function PurchasesPage() {
 
   useEffect(() => {
     return () => {
-      terminateOcrWorker();
       if (ocrSelectedImage?.previewUrl) {
         URL.revokeObjectURL(ocrSelectedImage.previewUrl);
       }
     };
   }, [ocrSelectedImage]);
 
-  const terminateOcrWorker = () => {
-    const worker = ocrWorkerRef.current;
-    ocrWorkerRef.current = null;
-    return worker?.terminate();
-  };
-
   const resetOcrState = () => {
-    terminateOcrWorker();
     setOcrSelectedImage(null);
     setOcrRotation(0);
     setOcrLoading(false);
@@ -140,95 +128,6 @@ export function PurchasesPage() {
     return true;
   };
 
-  const prepareImageForOcr = (file, rotationDegrees) => new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const image = new Image();
-    let drawSource = image;
-
-    const processImage = () => {
-      const sourceWidthPixels = drawSource.width || image.naturalWidth;
-      const sourceHeightPixels = drawSource.height || image.naturalHeight;
-      const maxDimension = 2200;
-      const cropX = Math.round(sourceWidthPixels * 0.02);
-      const cropY = Math.round(sourceHeightPixels * 0.02);
-      const sourceWidth = Math.max(1, sourceWidthPixels - cropX * 2);
-      const sourceHeight = Math.max(1, sourceHeightPixels - cropY * 2);
-      const scale = Math.min(2, maxDimension / Math.max(sourceWidth, sourceHeight));
-      const width = Math.max(1, Math.round(sourceWidth * scale));
-      const height = Math.max(1, Math.round(sourceHeight * scale));
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-
-      if (!context) {
-        URL.revokeObjectURL(objectUrl);
-        reject(new Error('The browser could not prepare the invoice image.'));
-        return;
-      }
-
-      const isPortrait = rotationDegrees % 180 !== 0;
-      canvas.width = isPortrait ? height : width;
-      canvas.height = isPortrait ? width : height;
-
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      context.translate(canvas.width / 2, canvas.height / 2);
-      context.rotate((rotationDegrees * Math.PI) / 180);
-      context.drawImage(drawSource, cropX, cropY, sourceWidth, sourceHeight, -width / 2, -height / 2, width, height);
-
-      URL.revokeObjectURL(objectUrl);
-      drawSource.close?.();
-      const original = canvas.toDataURL('image/png');
-      const grayscaleCanvas = document.createElement('canvas');
-      grayscaleCanvas.width = canvas.width;
-      grayscaleCanvas.height = canvas.height;
-      const grayscaleContext = grayscaleCanvas.getContext('2d');
-      grayscaleContext.drawImage(canvas, 0, 0);
-      const grayscaleData = grayscaleContext.getImageData(0, 0, canvas.width, canvas.height);
-      for (let index = 0; index < grayscaleData.data.length; index += 4) {
-        const gray = 0.299 * grayscaleData.data[index] + 0.587 * grayscaleData.data[index + 1] + 0.114 * grayscaleData.data[index + 2];
-        grayscaleData.data[index] = gray;
-        grayscaleData.data[index + 1] = gray;
-        grayscaleData.data[index + 2] = gray;
-      }
-      grayscaleContext.putImageData(grayscaleData, 0, 0);
-
-      const thresholdCanvas = document.createElement('canvas');
-      thresholdCanvas.width = canvas.width;
-      thresholdCanvas.height = canvas.height;
-      const thresholdContext = thresholdCanvas.getContext('2d');
-      thresholdContext.drawImage(grayscaleCanvas, 0, 0);
-      const thresholdData = thresholdContext.getImageData(0, 0, canvas.width, canvas.height);
-      for (let index = 0; index < thresholdData.data.length; index += 4) {
-        const adjusted = thresholdData.data[index] > 127 ? (thresholdData.data[index] - 127) * 1.45 + 127 : (thresholdData.data[index] - 127) * 0.75 + 127;
-        const threshold = adjusted > 160 ? 255 : 0;
-        thresholdData.data[index] = threshold;
-        thresholdData.data[index + 1] = threshold;
-        thresholdData.data[index + 2] = threshold;
-      }
-      thresholdContext.putImageData(thresholdData, 0, 0);
-      resolve([original, grayscaleCanvas.toDataURL('image/png'), thresholdCanvas.toDataURL('image/png')]);
-    };
-
-    image.onload = processImage;
-
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Unable to read the selected invoice image. Please try another file.'));
-    };
-
-    if (typeof createImageBitmap === 'function') {
-      createImageBitmap(file, { imageOrientation: 'from-image' })
-        .then((bitmap) => {
-          drawSource = bitmap;
-          processImage();
-        })
-        .catch(() => {
-          image.src = objectUrl;
-        });
-    } else {
-      image.src = objectUrl;
-    }
-  });
-
   const handleSelectedFile = (file) => {
     if (!validateImageFile(file)) return;
 
@@ -252,88 +151,41 @@ export function PurchasesPage() {
 
     try {
       setOcrLoading(true);
-      setOcrProgress(0);
+      setOcrProgress(15);
       setOcrError('');
       setOcrRows([]);
       setOcrResult(null);
-      setOcrStatus('Preparing image...');
+      setOcrStatus('Uploading invoice...');
 
-      const worker = await Tesseract.createWorker('eng', 1, {
-        logger: (message) => {
-          if (!message) return;
-          if (message.status === 'preparing image') {
-            setOcrStatus('Preparing image...');
-          }
-          if (message.status === 'recognizing text') {
-            setOcrStatus('Reading invoice...');
-            setOcrProgress(Math.round((message.progress || 0) * 100));
-          }
-          if (message.status === 'generating props') {
-            setOcrStatus('Extracting medicine details...');
-          }
-        },
-      });
-      ocrWorkerRef.current = worker;
-      const imageVariants = await prepareImageForOcr(ocrSelectedImage.file, ocrRotation);
-      const passes = [
-        { name: 'Reading invoice...', psm: 6 },
-        { name: 'Reading table...', psm: 4 },
-        { name: 'Reading sparse text...', psm: 11 },
-      ];
-      const results = [];
-      for (let passIndex = 0; passIndex < passes.length; passIndex += 1) {
-        const pass = passes[passIndex];
-        setOcrStatus(`${pass.name} (${passIndex + 1}/${passes.length})`);
-        await worker.setParameters({ tessedit_pageseg_mode: String(pass.psm) });
-        const result = await worker.recognize(imageVariants[passIndex % imageVariants.length], { rotateAuto: true });
-        results.push(result);
-      }
+      const extracted = await extractSupplierInvoiceImage(ocrSelectedImage.file);
 
-      const bestResult = results
-        .map((result) => ({ result, extracted: extractSupplierInvoiceData(result?.data || '', medicineResults) }))
-        .sort((left, right) => (right.extracted.items.length * 10 + Number(right.result?.data?.confidence || 0)) - (left.extracted.items.length * 10 + Number(left.result?.data?.confidence || 0)))[0];
-      const result = bestResult?.result;
-      const extractedText = result?.data?.text || '';
-      if (!extractedText.trim()) {
-        throw new Error('No readable text was detected. Please retake the photo with the full invoice clearly visible.');
-      }
-
-      setOcrStatus('Extracting medicine details...');
-      setOcrProgress(100);
-
-      const extracted = bestResult?.extracted || extractSupplierInvoiceData(result?.data || extractedText, medicineResults);
       if (!extracted?.items?.length) {
-        setOcrError(extracted?.warning || 'No medicine rows could be confidently extracted from this bill. Please retake the photo with the entire invoice clearly visible.');
-        setOcrResult(extracted || null);
-        setOcrRows([]);
-        return;
+        throw new Error(extracted?.message || 'Could not read this invoice clearly. Please upload a clearer image.');
       }
 
+      setOcrProgress(100);
+      setOcrStatus('Invoice extracted. Review the fields before importing.');
       setOcrResult(extracted);
-      setOcrDebug(extracted.debug || null);
-      setOcrRows(extracted.items.map((row, index) => ({
-        id: `${row.medicine_name || 'row'}-${index}-${Date.now()}`,
-        medicine_name: row.medicine_name || '',
-        batch_number: row.batch_number || '',
-        expiry_date: row.expiry_date || '',
+      setOcrRows((extracted.items || []).map((row, index) => ({
+        id: `${row.medicine || 'row'}-${index}-${Date.now()}`,
+        medicine_name: row.medicine || '',
+        batch_number: row.batch || '',
+        expiry_date: row.expiry || '',
         quantity: row.quantity ?? '',
-        free_quantity: row.free_quantity ?? '',
+        free_quantity: row.free ?? 0,
         mrp: row.mrp ?? '',
-        purchase_rate: row.purchase_rate ?? '',
-        gst_percentage: row.gst_percentage ?? '',
+        purchase_rate: row.rate ?? '',
+        gst_percentage: row.gst ?? '',
         hsn: row.hsn || '',
         amount: row.amount ?? '',
-        status: row.validation?.valid ? 'Ready' : 'Needs review',
-        warnings: row.validation?.message || 'Review required',
-        validation: row.validation,
-        confidence: row.confidence,
+        status: row.quantity || row.mrp || row.rate ? 'Ready' : 'Needs review',
+        warnings: row.quantity || row.mrp || row.rate ? 'Review before importing.' : 'Missing critical invoice data.',
       })));
     } catch (err) {
       setOcrError(err.response?.data?.message || err.message || 'OCR failed. Please use a clearer supplier invoice image.');
       setOcrResult(null);
       setOcrRows([]);
     } finally {
-      await terminateOcrWorker();
       setOcrLoading(false);
       setOcrStatus('');
     }
@@ -428,7 +280,11 @@ export function PurchasesPage() {
     try {
       setSubmitting(true);
       const result = await confirmSupplierInvoice({
-        supplier: ocrResult?.supplier || {},
+        supplier: {
+          ...(ocrResult?.supplier || {}),
+          invoice_number: ocrResult?.invoice?.number || null,
+          invoice_date: ocrResult?.invoice?.date || null,
+        },
         items: ocrRows.map((row) => ({
           medicine_name: row.medicine_name,
           batch_number: row.batch_number,
@@ -626,12 +482,12 @@ export function PurchasesPage() {
               </div>
             </div>
 
-            {ocrResult?.warning ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">{ocrResult.warning}</div> : null}
+            {ocrResult?.message ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">{ocrResult.message}</div> : null}
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <label className="block text-xs uppercase tracking-[0.08em] text-slate-400" htmlFor="ocr-gstin">GSTIN</label>
               <input id="ocr-gstin" value={ocrResult?.supplier?.gstin || ''} placeholder="Not detected" onChange={(event) => setOcrResult((previous) => ({ ...previous, supplier: { ...previous.supplier, gstin: event.target.value.toUpperCase() } }))} className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm" />
-              <p className="mt-1 text-xs text-slate-500">{ocrResult?.supplier?.gstin ? (ocrResult.supplier.gstin_confidence < 0.8 ? 'Verify GSTIN' : 'GSTIN detected') : 'Not detected'}</p>
+              <p className="mt-1 text-xs text-slate-500">{ocrResult?.supplier?.gstin ? 'GSTIN detected' : 'Not detected'}</p>
             </div>
 
             {import.meta.env.DEV && ocrDebug ? (
@@ -661,36 +517,34 @@ export function PurchasesPage() {
                 </thead>
                 <tbody>
                   {ocrRows.map((row, index) => {
-                    const hasIssues = row.validation?.valid === false || row.warnings?.length;
-                    const isMissing = !row.medicine_name || !row.batch_number || !row.expiry_date;
-                    const confidenceValues = Object.values(row.confidence || {}).map((field) => Number(field.confidence || 0)).filter(Boolean);
-                    const averageConfidence = confidenceValues.length ? Math.round((confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length) * 100) : 0;
+                    const hasIssues = row.status !== 'Ready';
+                    const isMissing = !row.medicine || !row.batch || !row.expiry;
 
                     return (
-                      <tr key={row.id || `${row.medicine_name || 'row'}-${index}`} className={`border-t border-slate-200 ${hasIssues ? 'bg-amber-50/40' : 'bg-white'}`}>
+                      <tr key={row.id || `${row.medicine || 'row'}-${index}`} className={`border-t border-slate-200 ${hasIssues ? 'bg-amber-50/40' : 'bg-white'}`}>
                         <td className="px-2 py-2">
                           <input
-                            value={row.medicine_name || ''}
-                            onChange={(event) => updateOcrRow(index, 'medicine_name', event.target.value)}
-                            className={`w-28 rounded border px-2 py-1 ${isMissing || !row.medicine_name ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white'}`}
+                            value={row.medicine || ''}
+                            onChange={(event) => updateOcrRow(index, 'medicine', event.target.value)}
+                            className={`w-28 rounded border px-2 py-1 ${isMissing || !row.medicine ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white'}`}
                           />
                         </td>
                         <td className="px-2 py-2">
-                          <input value={row.batch_number || ''} onChange={(event) => updateOcrRow(index, 'batch_number', event.target.value)} className={`w-20 rounded border px-2 py-1 ${!row.batch_number ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white'}`} />
+                          <input value={row.batch || ''} onChange={(event) => updateOcrRow(index, 'batch', event.target.value)} className={`w-20 rounded border px-2 py-1 ${!row.batch ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white'}`} />
                         </td>
                         <td className="px-2 py-2">
-                          <input value={row.expiry_date || ''} onChange={(event) => updateOcrRow(index, 'expiry_date', event.target.value)} className={`w-20 rounded border px-2 py-1 ${!row.expiry_date ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white'}`} />
+                          <input value={row.expiry || ''} onChange={(event) => updateOcrRow(index, 'expiry', event.target.value)} className={`w-20 rounded border px-2 py-1 ${!row.expiry ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white'}`} />
                         </td>
-                        <td className="px-2 py-2"><input type="number" value={row.quantity || 0} onChange={(event) => updateOcrRow(index, 'quantity', Number(event.target.value || 0))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
-                        <td className="px-2 py-2"><input type="number" value={row.free_quantity || 0} onChange={(event) => updateOcrRow(index, 'free_quantity', Number(event.target.value || 0))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
-                        <td className="px-2 py-2"><input type="number" value={row.mrp || 0} onChange={(event) => updateOcrRow(index, 'mrp', Number(event.target.value || 0))} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
-                        <td className="px-2 py-2"><input type="number" value={row.purchase_rate || 0} onChange={(event) => updateOcrRow(index, 'purchase_rate', Number(event.target.value || 0))} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
-                        <td className="px-2 py-2"><input type="number" value={row.gst_percentage || 0} onChange={(event) => updateOcrRow(index, 'gst_percentage', Number(event.target.value || 0))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input type="number" value={row.quantity ?? 0} onChange={(event) => updateOcrRow(index, 'quantity', Number(event.target.value || 0))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input type="number" value={row.free ?? 0} onChange={(event) => updateOcrRow(index, 'free', Number(event.target.value || 0))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input type="number" value={row.mrp ?? 0} onChange={(event) => updateOcrRow(index, 'mrp', Number(event.target.value || 0))} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input type="number" value={row.rate ?? 0} onChange={(event) => updateOcrRow(index, 'rate', Number(event.target.value || 0))} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input type="number" value={row.gst ?? 0} onChange={(event) => updateOcrRow(index, 'gst', Number(event.target.value || 0))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2"><input value={row.hsn || ''} onChange={(event) => updateOcrRow(index, 'hsn', event.target.value)} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2"><input type="number" value={row.amount ?? ''} onChange={(event) => updateOcrRow(index, 'amount', event.target.value === '' ? '' : Number(event.target.value))} className="w-20 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2">
                           <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-medium ${row.status === 'Ready' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`} title={row.warnings || ''}>
-                            {row.status === 'Ready' ? `High confidence (${averageConfidence}%)` : averageConfidence ? `Needs verification (${averageConfidence}%)` : 'Not detected'}
+                            {row.status === 'Ready' ? 'Ready' : 'Needs review'}
                           </span>
                         </td>
                         <td className="px-2 py-2">
