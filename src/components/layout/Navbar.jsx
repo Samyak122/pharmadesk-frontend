@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ChevronRight, Search, BellRing } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Search, BellRing, Moon, Sun } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { listInventory } from '../../services/pharmaService';
 import { resolvePharmacyLogo } from '../../utils/logoUtils';
+import { useTheme } from '../../context/ThemeContext';
 
 function titleFromPath(pathname) {
   const parts = pathname.split('/').filter(Boolean);
@@ -15,6 +16,7 @@ export function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isDemoMode } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const breadcrumb = titleFromPath(location.pathname);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const alertsContainerRef = useRef(null);
@@ -110,6 +112,16 @@ export function Navbar() {
           <Search size={16} />
           <input className="bg-transparent outline-none" placeholder="Search" />
         </label>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm"
+        >
+          {isDark ? <Sun size={16} /> : <Moon size={16} />}
+          <span className="hidden xl:inline">{isDark ? 'Light' : 'Dark'}</span>
+        </button>
         <div ref={alertsContainerRef} className="relative">
           <button type="button" onClick={() => setAlertsOpen((prev) => !prev)} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm">
             <BellRing size={16} />

@@ -238,6 +238,8 @@ export function PurchasesPage() {
         purchase_rate: 0,
         gst_percentage: 0,
         hsn: '',
+        is_narcotic: false,
+        is_schedule_h1: false,
         amount: '',
         status: 'Needs review',
         warnings: 'New row: complete the medicine details before import.',
@@ -295,6 +297,8 @@ export function PurchasesPage() {
           purchase_rate: Number(row.purchase_rate || 0),
           gst_percentage: Number(row.gst_percentage || 0),
           hsn: row.hsn || '',
+          is_narcotic: Boolean(row.is_narcotic),
+          is_schedule_h1: Boolean(row.is_schedule_h1),
         })),
       });
 
@@ -510,6 +514,8 @@ export function PurchasesPage() {
                     <th className="px-2 py-2">Rate</th>
                     <th className="px-2 py-2">GST</th>
                     <th className="px-2 py-2">HSN</th>
+                    <th className="px-2 py-2">Narcotic</th>
+                    <th className="px-2 py-2">Schedule H1</th>
                     <th className="px-2 py-2">Amount</th>
                     <th className="px-2 py-2">Status</th>
                     <th className="px-2 py-2">Action</th>
@@ -541,6 +547,8 @@ export function PurchasesPage() {
                         <td className="px-2 py-2"><input type="number" value={row.rate ?? 0} onChange={(event) => updateOcrRow(index, 'rate', Number(event.target.value || 0))} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2"><input type="number" value={row.gst ?? 0} onChange={(event) => updateOcrRow(index, 'gst', Number(event.target.value || 0))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2"><input value={row.hsn || ''} onChange={(event) => updateOcrRow(index, 'hsn', event.target.value)} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input type="checkbox" checked={Boolean(row.is_narcotic)} onChange={(event) => updateOcrRow(index, 'is_narcotic', event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900" /></td>
+                        <td className="px-2 py-2"><input type="checkbox" checked={Boolean(row.is_schedule_h1)} onChange={(event) => updateOcrRow(index, 'is_schedule_h1', event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900" /></td>
                         <td className="px-2 py-2"><input type="number" value={row.amount ?? ''} onChange={(event) => updateOcrRow(index, 'amount', event.target.value === '' ? '' : Number(event.target.value))} className="w-20 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2">
                           <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-medium ${row.status === 'Ready' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`} title={row.warnings || ''}>

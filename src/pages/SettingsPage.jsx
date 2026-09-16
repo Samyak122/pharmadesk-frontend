@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Save } from 'lucide-react';
+import { Moon, Save, Sun } from 'lucide-react';
 import { Loader } from '../components/common/Loader';
 import { useToast } from '../components/common/ToastProvider';
 import { getSettings, updateSettings } from '../services/pharmaService';
 import { resolvePharmacyLogo } from '../utils/logoUtils';
+import { useTheme } from '../context/ThemeContext';
 
 const initialFields = {
   pharmacy_name: '',
@@ -32,6 +33,7 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { showToast } = useToast();
+  const { isDark, toggleTheme } = useTheme();
 
   useEffect(() => {
     const load = async () => {
@@ -116,6 +118,10 @@ export function SettingsPage() {
             <span>Show Drug Classification on Invoice</span>
             <input type="checkbox" checked={Boolean(form.show_drug_classification)} onChange={(e) => updateField('show_drug_classification', e.target.checked)} className="h-5 w-5 rounded border-slate-300 text-slate-900 focus:ring-slate-900" />
           </div>
+          <button type="button" onClick={toggleTheme} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700">
+            <span>{isDark ? 'Dark Mode' : 'Light Mode'}<span className="mt-1 block text-xs font-normal text-slate-500">Use the same theme across PharmaDesk.</span></span>
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
           <label className="space-y-2 text-sm font-medium text-slate-700">
             <span>Address Line 1</span>
             <input className="w-full rounded-2xl border border-slate-200 px-4 py-3" value={form.address_line_1} onChange={(e) => updateField('address_line_1', e.target.value)} />

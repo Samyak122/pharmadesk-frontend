@@ -7,6 +7,16 @@
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background-color: #f8fafc;
   color: #0f172a;
+  --bg-primary: #f8fafc;
+  --bg-secondary: #eef2ff;
+  --bg-card: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --border-color: #e2e8f0;
+  --input-bg: #ffffff;
+  --input-border: #cbd5e1;
+  --table-bg: #ffffff;
+  --table-header-bg: #f8fafc;
   line-height: 1.5;
   font-weight: 400;
 }
@@ -20,6 +30,57 @@ body {
   min-height: 100vh;
   background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
 }
+
+html.dark {
+  color-scheme: dark;
+  --bg-primary: #111827;
+  --bg-secondary: #172033;
+  --bg-card: #1f2937;
+  --text-primary: #f8fafc;
+  --text-secondary: #a8b3c5;
+  --border-color: #374151;
+  --input-bg: #111827;
+  --input-border: #4b5563;
+  --table-bg: #1f2937;
+  --table-header-bg: #273449;
+}
+
+html.dark body {
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  color: var(--text-primary);
+}
+
+html.dark .bg-white, html.dark .bg-white\/80, html.dark .bg-white\/90 { background-color: var(--bg-card); }
+html.dark .bg-slate-50, html.dark .bg-slate-50\/70 { background-color: #273449; }
+html.dark .bg-slate-100, html.dark .bg-slate-100\/70 { background-color: #1b2638; }
+html.dark .bg-slate-200 { background-color: #344154; }
+html.dark .bg-slate-900 { background-color: #0b1220; }
+html.dark .border-slate-100 { border-color: #303b4d; }
+html.dark .border-slate-200, html.dark .border-slate-300 { border-color: var(--border-color); }
+html.dark .text-slate-900, html.dark .text-slate-800, html.dark .text-slate-700 { color: #f1f5f9; }
+html.dark .text-slate-600 { color: #c0cad8; }
+html.dark .text-slate-500, html.dark .text-slate-400 { color: #9aa8bb; }
+html.dark .text-slate-300 { color: #cbd5e1; }
+html.dark .hover\:bg-slate-50:hover { background-color: #2b384d; }
+html.dark .hover\:bg-slate-100:hover { background-color: #303d52; }
+html.dark .hover\:text-slate-900:hover { color: #ffffff; }
+html.dark input, html.dark select, html.dark textarea { background-color: var(--input-bg); border-color: var(--input-border); color: var(--text-primary); }
+html.dark input::placeholder, html.dark textarea::placeholder { color: #8290a4; }
+html.dark option { background-color: #1f2937; color: #f8fafc; }
+html.dark table { background-color: var(--table-bg); }
+html.dark .bg-amber-50 { background-color: #3d321c; }
+html.dark .border-amber-100, html.dark .border-amber-200 { border-color: #765b20; }
+html.dark .text-amber-800, html.dark .text-amber-900 { color: #f7d98a; }
+html.dark .bg-rose-50 { background-color: #42232c; }
+html.dark .border-rose-200 { border-color: #803a4b; }
+html.dark .text-rose-600, html.dark .text-rose-700, html.dark .text-rose-800 { color: #fda4af; }
+html.dark .bg-emerald-50 { background-color: #173d35; }
+html.dark .border-emerald-200 { border-color: #286b5a; }
+html.dark .text-emerald-600, html.dark .text-emerald-700 { color: #6ee7b7; }
+html.dark .bg-sky-50 { background-color: #19354d; }
+html.dark .border-sky-200 { border-color: #2d668c; }
+html.dark .text-sky-700 { color: #7dd3fc; }
+html.dark .invoice-print-only, html.dark .invoice-print-only * { background-color: #ffffff; color: #0f172a; border-color: #e2e8f0; }
 
 * {
   box-sizing: border-box;
@@ -76,6 +137,17 @@ body {
     padding: 10mm;
     margin: 0;
     width: 100%;
+  }
+
+  html.dark .invoice-print-only,
+  html.dark .invoice-print-only * {
+    background-color: #ffffff !important;
+    color: inherit !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  html.dark .invoice-print-page {
+    border: none !important;
   }
 
   table {

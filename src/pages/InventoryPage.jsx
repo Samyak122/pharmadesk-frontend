@@ -19,7 +19,7 @@ export function InventoryPage({ defaultFilter = 'all' }) {
   });
   const [activeBatch, setActiveBatch] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [adjustment, setAdjustment] = useState('');
+  const [adjustForm, setAdjustForm] = useState({ quantity: '', is_narcotic: false, is_schedule_h1: false });
   const [customModalOpen, setCustomModalOpen] = useState(false);
   const [customForm, setCustomForm] = useState({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, min_stock: 5, location: '', barcode: '' });
   const [customSubmitting, setCustomSubmitting] = useState(false);
@@ -76,15 +76,23 @@ export function InventoryPage({ defaultFilter = 'all' }) {
 
   const openAdjustModal = (batch) => {
     setActiveBatch(batch);
-    setAdjustment('');
+    setAdjustForm({
+      quantity: String(batch.quantity ?? 0),
+      is_narcotic: Boolean(batch.medicine?.is_narcotic ?? false),
+      is_schedule_h1: Boolean(batch.medicine?.is_schedule_h1 ?? false),
+    });
     setModalOpen(true);
   };
 
   const adjustQuantity = async (event) => {
     event.preventDefault();
     try {
-      const nextQuantity = Number(adjustment);
-      await updateInventory(activeBatch.stock_id, { quantity: nextQuantity });
+      const nextQuantity = Number(adjustForm.quantity);
+      await updateInventory(activeBatch.stock_id, {
+        quantity: nextQuantity,
+        is_narcotic: Boolean(adjustForm.is_narcotic),
+        is_schedule_h1: Boolean(adjustForm.is_schedule_h1),
+      });
       window.dispatchEvent(new Event('pharmadesk:refresh-dashboard'));
       await loadInventory();
       setModalOpen(false);
@@ -228,10 +236,25 @@ export function InventoryPage({ defaultFilter = 'all' }) {
         <EmptyState title="No Inventory" description="No inventory batches matched the current filters." />
       )}
 
-      <Modal open={modalOpen} title="Adjust quantity" description="Update the batch quantity directly through the backend inventory endpoint." onClose={() => setModalOpen(false)}>
-        <form onSubmit={adjustQuantity} className="space-y-3">
-          <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="New quantity" value={adjustment} onChange={(e) => setAdjustment(e.target.value)} required />
-          <button type="submit" className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Save Quantity</button>
+      <Modal open={modalOpen} title="Adjust quantity" description="Update the batch quantity and drug classification directly through the existing inventory endpoint." onClose={() => setModalOpen(false)}>
+        <form onSubmit={adjustQuantity} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-[0.08em] text-slate-500">Quantity</label>
+            <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="New quantity" value={adjustForm.quantity} onChange={(e) => setAdjustForm((prev) => ({ ...prev, quantity: e.target.value }))} required />
+          </div>
+
+          <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+              <span>Narcotic Drug</span>
+              <input type="checkbox" checked={Boolean(adjustForm.is_narcotic)} onChange={(e) => setAdjustForm((prev) => ({ ...prev, is_narcotic: e.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900" />
+            </label>
+            <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+              <span>Schedule H1 Drug</span>
+              <input type="checkbox" checked={Boolean(adjustForm.is_schedule_h1)} onChange={(e) => setAdjustForm((prev) => ({ ...prev, is_schedule_h1: e.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900" />
+            </label>
+          </div>
+
+          <button type="submit" className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Save Quantity & Classification</button>
         </form>
       </Modal>
 

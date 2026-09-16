@@ -5,6 +5,7 @@ import { ArrowUpRight, DollarSign, Package, AlertTriangle, CalendarRange, Boxes,
 import { Loader } from '../components/common/Loader';
 import { EmptyState } from '../components/common/EmptyState';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
+import { useTheme } from '../context/ThemeContext';
 import { getDashboardSummary, getSalesChart, listInventory, listInvoices } from '../services/pharmaService';
 import { formatMetricValue } from '../utils/dashboardUtils';
 
@@ -20,6 +21,7 @@ const cards = [
 ];
 
 export function DashboardPage() {
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [chartData, setChartData] = useState([]);
@@ -129,11 +131,11 @@ export function DashboardPage() {
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartSeries}>
-                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="5 5" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="sales" stroke="#0f172a" strokeWidth={3} />
+                  <CartesianGrid stroke={isDark ? '#475569' : '#e2e8f0'} strokeDasharray="5 5" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: isDark ? '#cbd5e1' : '#475569' }} />
+                  <YAxis tick={{ fontSize: 12, fill: isDark ? '#cbd5e1' : '#475569' }} />
+                  <Tooltip contentStyle={{ backgroundColor: isDark ? '#1f2937' : '#ffffff', borderColor: isDark ? '#475569' : '#e2e8f0', color: isDark ? '#f8fafc' : '#0f172a' }} />
+                  <Line type="monotone" dataKey="sales" stroke={isDark ? '#93c5fd' : '#0f172a'} strokeWidth={3} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
