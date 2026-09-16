@@ -172,7 +172,7 @@ export function PurchasesPage() {
         batch_number: row.batch || '',
         expiry_date: row.expiry || '',
         quantity: row.quantity ?? '',
-        free_quantity: row.free ?? 0,
+        free_quantity: row.free ?? '',
         mrp: row.mrp ?? '',
         purchase_rate: row.rate ?? '',
         gst_percentage: row.gst ?? '',
@@ -481,7 +481,7 @@ export function PurchasesPage() {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.08em] text-slate-400">Invoice</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-800">{ocrResult?.supplier?.invoice_number || 'Not detected'} / {ocrResult?.supplier?.invoice_date || 'Date not detected'}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">{ocrResult?.invoice?.number || 'Not detected'} / {ocrResult?.invoice?.date || 'Date not detected'}</p>
                 </div>
               </div>
             </div>
@@ -524,28 +524,28 @@ export function PurchasesPage() {
                 <tbody>
                   {ocrRows.map((row, index) => {
                     const hasIssues = row.status !== 'Ready';
-                    const isMissing = !row.medicine || !row.batch || !row.expiry;
+                    const isMissing = !row.medicine_name || !row.batch_number || !row.expiry_date;
 
                     return (
                       <tr key={row.id || `${row.medicine || 'row'}-${index}`} className={`border-t border-slate-200 ${hasIssues ? 'bg-amber-50/40' : 'bg-white'}`}>
                         <td className="px-2 py-2">
                           <input
-                            value={row.medicine || ''}
-                            onChange={(event) => updateOcrRow(index, 'medicine', event.target.value)}
-                            className={`w-28 rounded border px-2 py-1 ${isMissing || !row.medicine ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white'}`}
+                            value={row.medicine_name || ''}
+                            onChange={(event) => updateOcrRow(index, 'medicine_name', event.target.value)}
+                            className={`w-28 rounded border px-2 py-1 ${isMissing || !row.medicine_name ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white'}`}
                           />
                         </td>
                         <td className="px-2 py-2">
-                          <input value={row.batch || ''} onChange={(event) => updateOcrRow(index, 'batch', event.target.value)} className={`w-20 rounded border px-2 py-1 ${!row.batch ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white'}`} />
+                          <input value={row.batch_number || ''} onChange={(event) => updateOcrRow(index, 'batch_number', event.target.value)} className={`w-20 rounded border px-2 py-1 ${!row.batch_number ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white'}`} />
                         </td>
                         <td className="px-2 py-2">
-                          <input value={row.expiry || ''} onChange={(event) => updateOcrRow(index, 'expiry', event.target.value)} className={`w-20 rounded border px-2 py-1 ${!row.expiry ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white'}`} />
+                          <input value={row.expiry_date || ''} onChange={(event) => updateOcrRow(index, 'expiry_date', event.target.value)} className={`w-20 rounded border px-2 py-1 ${!row.expiry_date ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white'}`} />
                         </td>
-                        <td className="px-2 py-2"><input type="number" value={row.quantity ?? 0} onChange={(event) => updateOcrRow(index, 'quantity', Number(event.target.value || 0))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
-                        <td className="px-2 py-2"><input type="number" value={row.free ?? 0} onChange={(event) => updateOcrRow(index, 'free', Number(event.target.value || 0))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
-                        <td className="px-2 py-2"><input type="number" value={row.mrp ?? 0} onChange={(event) => updateOcrRow(index, 'mrp', Number(event.target.value || 0))} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
-                        <td className="px-2 py-2"><input type="number" value={row.rate ?? 0} onChange={(event) => updateOcrRow(index, 'rate', Number(event.target.value || 0))} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
-                        <td className="px-2 py-2"><input type="number" value={row.gst ?? 0} onChange={(event) => updateOcrRow(index, 'gst', Number(event.target.value || 0))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input type="number" value={row.quantity ?? ''} onChange={(event) => updateOcrRow(index, 'quantity', event.target.value === '' ? null : Number(event.target.value))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input type="number" value={row.free_quantity ?? ''} onChange={(event) => updateOcrRow(index, 'free_quantity', event.target.value === '' ? null : Number(event.target.value))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input type="number" value={row.mrp ?? ''} onChange={(event) => updateOcrRow(index, 'mrp', event.target.value === '' ? null : Number(event.target.value))} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input type="number" value={row.purchase_rate ?? ''} onChange={(event) => updateOcrRow(index, 'purchase_rate', event.target.value === '' ? null : Number(event.target.value))} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input type="number" value={row.gst_percentage ?? ''} onChange={(event) => updateOcrRow(index, 'gst_percentage', event.target.value === '' ? null : Number(event.target.value))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2"><input value={row.hsn || ''} onChange={(event) => updateOcrRow(index, 'hsn', event.target.value)} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2"><input type="checkbox" checked={Boolean(row.is_narcotic)} onChange={(event) => updateOcrRow(index, 'is_narcotic', event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900" /></td>
                         <td className="px-2 py-2"><input type="checkbox" checked={Boolean(row.is_schedule_h1)} onChange={(event) => updateOcrRow(index, 'is_schedule_h1', event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900" /></td>
