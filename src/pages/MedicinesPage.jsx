@@ -19,7 +19,7 @@ export function MedicinesPage() {
   const [form, setForm] = useState({ batch_no: '', expiry_date: '', quantity: 10, unit_cost: '', selling_price: '', min_stock: 5, location: '' });
   const [submitting, setSubmitting] = useState(false);
   const [customModalOpen, setCustomModalOpen] = useState(false);
-  const [customForm, setCustomForm] = useState({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, min_stock: 5, location: '', barcode: '' });
+  const [customForm, setCustomForm] = useState({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, min_stock: 5, location: '', barcode: '', is_narcotic: false, is_schedule_h1: false });
   const [customSubmitting, setCustomSubmitting] = useState(false);
   const { showToast } = useToast();
 
@@ -96,6 +96,8 @@ export function MedicinesPage() {
         hsn_code: customForm.hsn_code,
         gst_percent: Number(customForm.gst_percent || 0),
         barcode: customForm.barcode,
+        is_narcotic: Boolean(customForm.is_narcotic),
+        is_schedule_h1: Boolean(customForm.is_schedule_h1),
       });
 
       await createInventory({
@@ -110,7 +112,7 @@ export function MedicinesPage() {
       });
 
       setCustomModalOpen(false);
-      setCustomForm({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, min_stock: 5, location: '', barcode: '' });
+      setCustomForm({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, min_stock: 5, location: '', barcode: '', is_narcotic: false, is_schedule_h1: false });
       setSearch(createdMedicine.medicine_name);
       await loadMedicines(createdMedicine.medicine_name);
       showToast('Custom product created and added to inventory', 'success');
@@ -191,6 +193,10 @@ export function MedicinesPage() {
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Quantity" value={customForm.quantity} onChange={(e) => setCustomForm({ ...customForm, quantity: e.target.value })} required />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Minimum Stock" value={customForm.min_stock} onChange={(e) => setCustomForm({ ...customForm, min_stock: e.target.value })} />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" placeholder="Rack Location" value={customForm.location} onChange={(e) => setCustomForm({ ...customForm, location: e.target.value })} />
+          <div className="flex flex-wrap gap-4 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 md:col-span-2">
+            <label className="flex items-center gap-2"><input type="checkbox" checked={Boolean(customForm.is_narcotic)} onChange={(e) => setCustomForm({ ...customForm, is_narcotic: e.target.checked })} /> Narcotic</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={Boolean(customForm.is_schedule_h1)} onChange={(e) => setCustomForm({ ...customForm, is_schedule_h1: e.target.checked })} /> Schedule H1</label>
+          </div>
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" placeholder="Barcode (optional)" value={customForm.barcode} onChange={(e) => setCustomForm({ ...customForm, barcode: e.target.value })} />
           <button disabled={customSubmitting} type="submit" className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white md:col-span-2 disabled:opacity-70">{customSubmitting ? 'Saving...' : 'Save Product'}</button>
         </form>

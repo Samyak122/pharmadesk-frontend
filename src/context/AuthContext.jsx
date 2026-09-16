@@ -33,7 +33,7 @@ export function AuthProvider({ children }) {
     resetDemoData();
     window.__GENPHARMA_DEMO_MODE__ = true;
     setIsDemoMode(true);
-    setUser({ username: 'Demo User', role: 'Demo Pharmacist' });
+    setUser({ username: 'Demo User', role: 'Demo Pharmacist', license_number: 'DL-DEMO-2024', license_expiry_date: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString().slice(0, 10) });
   };
 
   const register = async (payload) => {

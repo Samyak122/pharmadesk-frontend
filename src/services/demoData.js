@@ -7,11 +7,11 @@ const dateFromToday = (days) => {
 };
 
 const medicines = [
-  { medicine_id: 1, medicine_name: 'Himalaya Face Wash', manufacturer: 'Himalaya Wellness', composition: 'Neem and turmeric', category: 'Personal Care', hsn_code: '330499', gst_percent: 18 },
-  { medicine_id: 2, medicine_name: 'Azithral 500 Tablet', manufacturer: 'Alembic Pharmaceuticals', composition: 'Azithromycin 500mg', category: 'Antibiotic', hsn_code: '300490', gst_percent: 12 },
-  { medicine_id: 3, medicine_name: 'Allegra 120mg Tablet', manufacturer: 'Sanofi', composition: 'Fexofenadine 120mg', category: 'Anti-allergic', hsn_code: '300490', gst_percent: 12 },
-  { medicine_id: 4, medicine_name: 'Avil 25 Tablet', manufacturer: 'Sanofi', composition: 'Pheniramine maleate 25mg', category: 'Anti-allergic', hsn_code: '300490', gst_percent: 12 },
-  { medicine_id: 5, medicine_name: 'Avastin 400mg Injection', manufacturer: 'Roche', composition: 'Bevacizumab 400mg', category: 'Injection', hsn_code: '300212', gst_percent: 12 },
+  { medicine_id: 1, medicine_name: 'Himalaya Face Wash', manufacturer: 'Himalaya Wellness', composition: 'Neem and turmeric', category: 'Personal Care', hsn_code: '330499', gst_percent: 18, is_narcotic: false, is_schedule_h1: false },
+  { medicine_id: 2, medicine_name: 'Azithral 500 Tablet', manufacturer: 'Alembic Pharmaceuticals', composition: 'Azithromycin 500mg', category: 'Antibiotic', hsn_code: '300490', gst_percent: 12, is_narcotic: false, is_schedule_h1: false },
+  { medicine_id: 3, medicine_name: 'Allegra 120mg Tablet', manufacturer: 'Sanofi', composition: 'Fexofenadine 120mg', category: 'Anti-allergic', hsn_code: '300490', gst_percent: 12, is_narcotic: false, is_schedule_h1: false },
+  { medicine_id: 4, medicine_name: 'Avil 25 Tablet', manufacturer: 'Sanofi', composition: 'Pheniramine maleate 25mg', category: 'Anti-allergic', hsn_code: '300490', gst_percent: 12, is_narcotic: false, is_schedule_h1: false },
+  { medicine_id: 5, medicine_name: 'Avastin 400mg Injection', manufacturer: 'Roche', composition: 'Bevacizumab 400mg', category: 'Injection', hsn_code: '300212', gst_percent: 12, is_narcotic: true, is_schedule_h1: false },
 ];
 
 const customers = [
@@ -50,7 +50,7 @@ const purchases = [
 ];
 
 const settings = {
-  pharmacy_name: 'GenPharma Demo Pharmacy', owner_name: 'Demo Pharmacist', gstin: '27AAACG1234A1Z5', drug_license_number: 'DL-DEMO-2024', address_line_1: 'MG Road', address_line_2: '', city: 'Pune', state: 'Maharashtra', pin_code: '411001', phone_number: '7620604870', email: 'gen.pharma.official@gmail.com', website: '', logo_url: '', invoice_footer: 'Thank you for choosing GenPharma.', currency: 'INR', timezone: 'Asia/Kolkata',
+  pharmacy_name: 'GenPharma Demo Pharmacy', owner_name: 'Demo Pharmacist', gstin: '27AAACG1234A1Z5', drug_license_number: 'DL-DEMO-2024', license_number: 'PL-DEMO-2025', license_expiry_date: dateFromToday(45), show_drug_classification: true, address_line_1: 'MG Road', address_line_2: '', city: 'Pune', state: 'Maharashtra', pin_code: '411001', phone_number: '7620604870', email: 'gen.pharma.official@gmail.com', website: '', logo_url: '', invoice_footer: 'Thank you for choosing GenPharma.', currency: 'INR', timezone: 'Asia/Kolkata',
 };
 
 const clone = (value) => structuredClone(value);

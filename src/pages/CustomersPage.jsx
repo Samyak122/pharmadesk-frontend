@@ -50,18 +50,25 @@ function normalizeInvoiceForPreview(invoice, extra = {}) {
 }
 
 function buildInvoicePrintHtml(invoice, settings) {
-  const rows = (invoice?.items || []).map((item) => `
+  const showClassification = Boolean(settings?.show_drug_classification);
+  const rows = (invoice?.items || []).map((item) => {
+    const isNarcotic = Boolean(item.is_narcotic ?? item.medicine?.is_narcotic ?? item.inventoryBatch?.medicine?.is_narcotic ?? false);
+    const isScheduleH1 = Boolean(item.is_schedule_h1 ?? item.medicine?.is_schedule_h1 ?? item.inventoryBatch?.medicine?.is_schedule_h1 ?? false);
+    const classification = isNarcotic ? 'Narcotic' : isScheduleH1 ? 'Schedule H1' : 'Standard';
+    return `
     <tr>
       <td>${item.medicine_name || '—'}</td>
       <td>${item.batch_no || '—'}</td>
       <td>${item.expiry_date || '—'}</td>
+      ${showClassification ? `<td>${classification}</td>` : ''}
       <td>${item.quantity || 0}</td>
       <td>${formatCurrency(item.unit_price || 0)}</td>
       <td>${item.gst_percent || 0}%</td>
       <td>${formatCurrency(item.gst_amount || 0)}</td>
       <td>${formatCurrency(item.line_total || 0)}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
   const subtotal = Number(invoice?.subtotal || 0);
   const discountAmount = Number(invoice?.discount_amount || 0);
@@ -112,7 +119,7 @@ function buildInvoicePrintHtml(invoice, settings) {
           <table>
             <thead>
               <tr>
-                <th>Medicine</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>Unit Price</th><th>GST %</th><th>GST Amt</th><th>Line Total</th>
+                <th>Medicine</th><th>Batch</th><th>Expiry</th>${showClassification ? '<th>Drug Class</th>' : ''}<th>Qty</th><th>Unit Price</th><th>GST %</th><th>GST Amt</th><th>Line Total</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -145,7 +152,7 @@ export function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [history, setHistory] = useState(null);
   const [settings, setSettings] = useState(null);
-  const [customerForm, setCustomerForm] = useState({ customer_name: '', phone: '', email: '', address: '' });
+  const [customerForm, setCustomerForm] = useState({ customer_name: '', phone: '', email: '', address: '', date_of_birth: '' });
   const [previewInvoice, setPreviewInvoice] = useState(null);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
@@ -197,7 +204,7 @@ export function CustomersPage() {
 
   const openCustomerModal = (customer = null) => {
     setSelectedCustomer(customer);
-    setCustomerForm(customer ? { customer_name: customer.customer_name || '', phone: customer.phone || '', email: customer.email || '', address: customer.address || '' } : { customer_name: '', phone: '', email: '', address: '' });
+    setCustomerForm(customer ? { customer_name: customer.customer_name || '', phone: customer.phone || '', email: customer.email || '', address: customer.address || '', date_of_birth: customer.date_of_birth || '' } : { customer_name: '', phone: '', email: '', address: '', date_of_birth: '' });
     setModalOpen(true);
   };
 
@@ -387,6 +394,7 @@ export function CustomersPage() {
                 <div>
                   <h3 className="font-semibold text-slate-900">{customer.customer_name}</h3>
                   <p className="mt-2 text-sm text-slate-500">Phone: {customer.phone}</p>
+                  <p className="text-sm text-slate-500">DOB: {customer.date_of_birth || 'Not provided'}</p>
                   <p className="text-sm text-slate-500">Email: {customer.email || '—'}</p>
                 </div>
                 <button type="button" onClick={() => inspectHistory(customer)} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600">History</button>
@@ -412,6 +420,7 @@ export function CustomersPage() {
             <form onSubmit={saveCustomer} className="space-y-3">
               <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Customer name" value={customerForm.customer_name} onChange={(e) => setCustomerForm({ ...customerForm, customer_name: e.target.value })} required />
               <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Phone" value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} required />
+              <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="date" value={customerForm.date_of_birth || ''} onChange={(e) => setCustomerForm({ ...customerForm, date_of_birth: e.target.value })} />
               <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Email (optional)" value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} />
               <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Address (optional)" value={customerForm.address} onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })} />
               <button type="submit" className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Save Customer</button>

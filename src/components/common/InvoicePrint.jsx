@@ -4,6 +4,8 @@ import { resolvePharmacyLogo } from '../../utils/logoUtils';
 export function InvoicePrint({ invoice, settings }) {
   if (!invoice) return null;
 
+  const showClassification = Boolean(settings?.show_drug_classification);
+
   const rows = (invoice?.items || []).map((item) => {
     const quantity = Number(item.quantity || 0);
     const unitPrice = Number(item.unit_price || 0);
@@ -11,6 +13,9 @@ export function InvoicePrint({ invoice, settings }) {
     const gstPercent = Number(item.gst_percent ?? invoice?.gst_percent ?? 0);
     const gstAmount = Number(((lineSubtotal * gstPercent) / 100).toFixed(2));
     const lineTotal = Number((lineSubtotal + gstAmount).toFixed(2));
+    const isNarcotic = Boolean(item.is_narcotic ?? item.medicine?.is_narcotic ?? item.inventoryBatch?.medicine?.is_narcotic ?? false);
+    const isScheduleH1 = Boolean(item.is_schedule_h1 ?? item.medicine?.is_schedule_h1 ?? item.inventoryBatch?.medicine?.is_schedule_h1 ?? false);
+    const classification = isNarcotic ? 'Narcotic' : isScheduleH1 ? 'Schedule H1' : 'Standard';
 
     return {
       medicine_name: item.medicine_name || item.inventoryBatch?.medicine?.medicine_name || '—',
@@ -21,6 +26,7 @@ export function InvoicePrint({ invoice, settings }) {
       gst_percent: gstPercent,
       gst_amount: gstAmount,
       line_total: lineTotal,
+      classification,
     };
   });
 
@@ -76,6 +82,7 @@ export function InvoicePrint({ invoice, settings }) {
                 <th className="px-4 py-3 text-left">Medicine</th>
                 <th className="px-4 py-3 text-left">Batch</th>
                 <th className="px-4 py-3 text-left">Expiry</th>
+                {showClassification ? <th className="px-4 py-3 text-left">Drug Class</th> : null}
                 <th className="px-4 py-3 text-left">Qty</th>
                 <th className="px-4 py-3 text-left">Unit Price</th>
                 <th className="px-4 py-3 text-left">GST %</th>
@@ -89,6 +96,7 @@ export function InvoicePrint({ invoice, settings }) {
                   <td className="px-4 py-3">{row.medicine_name}</td>
                   <td className="px-4 py-3">{row.batch_no}</td>
                   <td className="px-4 py-3">{row.expiry_date}</td>
+                  {showClassification ? <td className="px-4 py-3">{row.classification}</td> : null}
                   <td className="px-4 py-3">{row.quantity}</td>
                   <td className="px-4 py-3">{formatCurrency(row.unit_price)}</td>
                   <td className="px-4 py-3">{row.gst_percent}%</td>

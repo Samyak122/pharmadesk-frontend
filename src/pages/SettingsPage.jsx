@@ -10,6 +10,9 @@ const initialFields = {
   owner_name: '',
   gstin: '',
   drug_license_number: '',
+  license_number: '',
+  license_expiry_date: '',
+  show_drug_classification: false,
   address_line_1: '',
   address_line_2: '',
   city: '',
@@ -101,6 +104,18 @@ export function SettingsPage() {
             <span>Drug License Number</span>
             <input className="w-full rounded-2xl border border-slate-200 px-4 py-3" value={form.drug_license_number} onChange={(e) => updateField('drug_license_number', e.target.value)} />
           </label>
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            <span>Pharmacist License Number</span>
+            <input className="w-full rounded-2xl border border-slate-200 px-4 py-3" value={form.license_number} onChange={(e) => updateField('license_number', e.target.value)} />
+          </label>
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            <span>Pharmacist License Expiry</span>
+            <input type="date" className="w-full rounded-2xl border border-slate-200 px-4 py-3" value={form.license_expiry_date || ''} onChange={(e) => updateField('license_expiry_date', e.target.value)} />
+          </label>
+          <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+            <span>Show Drug Classification on Invoice</span>
+            <input type="checkbox" checked={Boolean(form.show_drug_classification)} onChange={(e) => updateField('show_drug_classification', e.target.checked)} className="h-5 w-5 rounded border-slate-300 text-slate-900 focus:ring-slate-900" />
+          </div>
           <label className="space-y-2 text-sm font-medium text-slate-700">
             <span>Address Line 1</span>
             <input className="w-full rounded-2xl border border-slate-200 px-4 py-3" value={form.address_line_1} onChange={(e) => updateField('address_line_1', e.target.value)} />

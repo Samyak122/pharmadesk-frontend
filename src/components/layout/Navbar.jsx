@@ -20,6 +20,7 @@ export function Navbar() {
   const alertsContainerRef = useRef(null);
   const [stockAlerts, setStockAlerts] = useState([]);
   const [expiryAlerts, setExpiryAlerts] = useState([]);
+  const [licenseAlerts, setLicenseAlerts] = useState([]);
 
   useEffect(() => {
     if (!alertsOpen) return undefined;
@@ -71,7 +72,25 @@ export function Navbar() {
     };
   }, []);
 
-  const alertCount = useMemo(() => stockAlerts.length + expiryAlerts.length, [stockAlerts, expiryAlerts]);
+  useEffect(() => {
+    if (!user?.license_expiry_date) {
+      setLicenseAlerts([]);
+      return;
+    }
+
+    const expiryDate = new Date(`${user.license_expiry_date}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysRemaining = Math.ceil((expiryDate.getTime() - today.getTime()) / 86400000);
+
+    if (daysRemaining <= 30) {
+      setLicenseAlerts([{ title: user.license_number ? `License ${user.license_number}` : 'Pharmacist License', daysRemaining, expired: daysRemaining < 0 }]);
+    } else {
+      setLicenseAlerts([]);
+    }
+  }, [user]);
+
+  const alertCount = useMemo(() => stockAlerts.length + expiryAlerts.length + licenseAlerts.length, [stockAlerts, expiryAlerts, licenseAlerts]);
 
   return (
     <header className="flex items-center justify-between rounded-[28px] border border-slate-200 bg-white/80 px-6 py-4 shadow-sm backdrop-blur">
@@ -123,6 +142,20 @@ export function Navbar() {
                   </div>
                 )) : <p className="mt-2 text-sm text-slate-500">No Alerts</p>}
               </div>
+              {licenseAlerts.length ? (
+                <div className="mt-3 rounded-2xl border border-amber-100 bg-amber-50 p-3">
+                  <div className="flex w-full items-center justify-between rounded-2xl bg-amber-100/80 px-3 py-2 text-left text-sm font-semibold text-amber-900">
+                    <span className="flex items-center gap-2"><AlertTriangle size={14} /> License Alert</span>
+                    <span className="rounded-full bg-amber-700 px-2 py-0.5 text-xs text-white">{licenseAlerts.length}</span>
+                  </div>
+                  {licenseAlerts.map((alert, index) => (
+                    <div key={`${alert.title}-${index}`} className="mt-2 rounded-2xl border border-amber-200 bg-white px-3 py-2 text-sm text-amber-800">
+                      <p className="font-medium text-amber-900">{alert.title}</p>
+                      <p>{alert.expired ? 'License expired' : `Expires in ${Math.abs(alert.daysRemaining)} days`}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
