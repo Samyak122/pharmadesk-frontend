@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { resolvePharmacyLogo } from './logoUtils';
+import { getInvoiceDrugClassification } from './drugClassification';
 
 export function exportReportExcel(reportName, rows, columns) {
   const worksheet = XLSX.utils.json_to_sheet(rows.map((row) => {
@@ -55,16 +56,23 @@ export function exportInvoicePdf(invoice, settings = {}) {
     const gstPercent = Number(item.gst_percent ?? invoice?.gst_percent ?? 0);
     const gstAmount = Number(((lineSubtotal * gstPercent) / 100).toFixed(2));
     const lineTotal = Number((lineSubtotal + gstAmount).toFixed(2));
+    const classification = getInvoiceDrugClassification(item, settings) || 'Standard';
+    const packQuantity = Number(item.pack_quantity || 0);
+    const looseQuantity = Number(item.loose_quantity || (packQuantity ? 0 : quantity));
 
-    return [
+    const row = [
       item.medicine_name || item.inventoryBatch?.medicine?.medicine_name || '—',
       item.batch_no || item.inventoryBatch?.batch_no || '—',
       item.expiry_date || item.inventoryBatch?.expiry_date || '—',
-      quantity,
+      packQuantity
+        ? `${packQuantity} pack${packQuantity === 1 ? '' : 's'}${looseQuantity ? ` + ${looseQuantity} loose` : ''} (${quantity} units)`
+        : `${quantity} units`,
       unitPrice,
       gstPercent,
       lineTotal,
     ];
+    if (settings?.show_drug_classification) row.splice(3, 0, classification);
+    return row;
   });
 
   try {
@@ -92,7 +100,9 @@ export function exportInvoicePdf(invoice, settings = {}) {
 
   autoTable(doc, {
     startY: y,
-    head: [['Medicine Name', 'Batch', 'Expiry', 'Qty', 'Unit Price', 'GST %', 'Line Total']],
+    head: [settings?.show_drug_classification
+      ? ['Medicine Name', 'Batch', 'Expiry', 'Drug Class', 'Sale / Qty', 'Unit Price', 'GST %', 'Line Total']
+      : ['Medicine Name', 'Batch', 'Expiry', 'Sale / Qty', 'Unit Price', 'GST %', 'Line Total']],
     body: rows,
     styles: { fontSize: 9, cellPadding: 3 },
     headStyles: { fillColor: [15, 23, 42] },

@@ -19,9 +19,9 @@ export function InventoryPage({ defaultFilter = 'all' }) {
   });
   const [activeBatch, setActiveBatch] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [adjustForm, setAdjustForm] = useState({ quantity: '', is_narcotic: false, is_schedule_h1: false });
+  const [adjustForm, setAdjustForm] = useState({ quantity: '', units_per_pack: 1, is_narcotic: false, is_schedule_h1: false });
   const [customModalOpen, setCustomModalOpen] = useState(false);
-  const [customForm, setCustomForm] = useState({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, min_stock: 5, location: '', barcode: '' });
+  const [customForm, setCustomForm] = useState({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, units_per_pack: 1, min_stock: 5, location: '', barcode: '' });
   const [customSubmitting, setCustomSubmitting] = useState(false);
   const { showToast } = useToast();
   const debouncedSearch = useDebouncedValue(filters.search, 300);
@@ -78,6 +78,7 @@ export function InventoryPage({ defaultFilter = 'all' }) {
     setActiveBatch(batch);
     setAdjustForm({
       quantity: String(batch.quantity ?? 0),
+      units_per_pack: Number(batch.units_per_pack || 1),
       is_narcotic: Boolean(batch.medicine?.is_narcotic ?? false),
       is_schedule_h1: Boolean(batch.medicine?.is_schedule_h1 ?? false),
     });
@@ -90,6 +91,7 @@ export function InventoryPage({ defaultFilter = 'all' }) {
       const nextQuantity = Number(adjustForm.quantity);
       await updateInventory(activeBatch.stock_id, {
         quantity: nextQuantity,
+        units_per_pack: Number(adjustForm.units_per_pack),
         is_narcotic: Boolean(adjustForm.is_narcotic),
         is_schedule_h1: Boolean(adjustForm.is_schedule_h1),
       });
@@ -132,6 +134,7 @@ export function InventoryPage({ defaultFilter = 'all' }) {
         batch_no: customForm.batch_no,
         expiry_date: customForm.expiry_date,
         quantity: Number(customForm.quantity || 0),
+        units_per_pack: Number(customForm.units_per_pack || 1),
         unit_cost: Number(customForm.purchase_price || 0),
         selling_price: Number(customForm.selling_price || 0),
         min_stock: Number(customForm.min_stock || 5),
@@ -139,7 +142,7 @@ export function InventoryPage({ defaultFilter = 'all' }) {
       });
 
       setCustomModalOpen(false);
-      setCustomForm({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, min_stock: 5, location: '', barcode: '' });
+      setCustomForm({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, units_per_pack: 1, min_stock: 5, location: '', barcode: '' });
       await loadInventory();
       showToast('Custom product created and added to inventory', 'success');
     } catch (err) {
@@ -159,7 +162,7 @@ export function InventoryPage({ defaultFilter = 'all' }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Inventory Management</h2>
-          <p className="text-sm text-slate-500">Batch-level stock control and expiry awareness are sourced from the backend.</p>
+          <p className="text-sm text-slate-500">Stock quantities and prices are per individual unit; Units per Pack is for converting pack sales.</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <div className="min-w-[220px]">
@@ -195,15 +198,17 @@ export function InventoryPage({ defaultFilter = 'all' }) {
       ) : null}
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       {batches.length ? (
-        <div className="overflow-hidden rounded-2xl border border-slate-200">
-          <table className="min-w-full text-left text-sm">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200">
+          <table className="min-w-[980px] text-left text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
                 <th className="px-4 py-3">Medicine</th>
                 <th className="px-4 py-3">Batch</th>
                 <th className="px-4 py-3">Expiry</th>
-                <th className="px-4 py-3">Qty</th>
+                <th className="px-4 py-3">Individual Units</th>
+                <th className="px-4 py-3">Units per Pack</th>
                 <th className="px-4 py-3">Selling</th>
+                <th className="px-4 py-3">Supplier Name</th>
                 <th className="px-4 py-3">Rack</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Actions</th>
@@ -216,7 +221,9 @@ export function InventoryPage({ defaultFilter = 'all' }) {
                   <td className="px-4 py-3">{batch.batch_no}</td>
                   <td className="px-4 py-3">{batch.expiry_date}</td>
                   <td className="px-4 py-3">{batch.quantity}</td>
+                  <td className="px-4 py-3">{Number(batch.units_per_pack || 1)}</td>
                   <td className="px-4 py-3">₹{Number(batch.selling_price || 0).toLocaleString('en-IN')}</td>
+                  <td className="px-4 py-3">{batch.supplier_name || 'Not specified'}</td>
                   <td className="px-4 py-3">{batch.location || '—'}</td>
                   <td className="px-4 py-3">
                     {batch.isExpired ? <span className="rounded-full bg-rose-100 px-2 py-1 text-rose-700">Expired</span> : batch.isLowStock ? <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">Low Stock</span> : <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Healthy</span>}
@@ -239,8 +246,12 @@ export function InventoryPage({ defaultFilter = 'all' }) {
       <Modal open={modalOpen} title="Adjust quantity" description="Update the batch quantity and drug classification directly through the existing inventory endpoint." onClose={() => setModalOpen(false)}>
         <form onSubmit={adjustQuantity} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs font-medium uppercase tracking-[0.08em] text-slate-500">Quantity</label>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-[0.08em] text-slate-500">Quantity (individual units)</label>
             <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="New quantity" value={adjustForm.quantity} onChange={(e) => setAdjustForm((prev) => ({ ...prev, quantity: e.target.value }))} required />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-[0.08em] text-slate-500">Units per Pack</label>
+            <input className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="1" step="1" value={adjustForm.units_per_pack} onChange={(e) => setAdjustForm((prev) => ({ ...prev, units_per_pack: e.target.value }))} required />
           </div>
 
           <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
@@ -254,7 +265,7 @@ export function InventoryPage({ defaultFilter = 'all' }) {
             </label>
           </div>
 
-          <button type="submit" className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Save Quantity & Classification</button>
+          <button type="submit" className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Save Stock & Classification</button>
         </form>
       </Modal>
 
@@ -266,11 +277,12 @@ export function InventoryPage({ defaultFilter = 'all' }) {
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Composition (optional)" value={customForm.composition} onChange={(e) => setCustomForm({ ...customForm, composition: e.target.value })} />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="HSN Code (optional)" value={customForm.hsn_code} onChange={(e) => setCustomForm({ ...customForm, hsn_code: e.target.value })} />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="GST %" value={customForm.gst_percent} onChange={(e) => setCustomForm({ ...customForm, gst_percent: e.target.value })} />
-          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Purchase Price" value={customForm.purchase_price} onChange={(e) => setCustomForm({ ...customForm, purchase_price: e.target.value })} />
-          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Selling Price" value={customForm.selling_price} onChange={(e) => setCustomForm({ ...customForm, selling_price: e.target.value })} />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Purchase cost per individual unit" value={customForm.purchase_price} onChange={(e) => setCustomForm({ ...customForm, purchase_price: e.target.value })} />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Selling price per individual unit" value={customForm.selling_price} onChange={(e) => setCustomForm({ ...customForm, selling_price: e.target.value })} />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Batch Number" value={customForm.batch_no} onChange={(e) => setCustomForm({ ...customForm, batch_no: e.target.value })} required />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="date" value={customForm.expiry_date} onChange={(e) => setCustomForm({ ...customForm, expiry_date: e.target.value })} required />
-          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Quantity" value={customForm.quantity} onChange={(e) => setCustomForm({ ...customForm, quantity: e.target.value })} required />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Stock quantity (individual units)" value={customForm.quantity} onChange={(e) => setCustomForm({ ...customForm, quantity: e.target.value })} required />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="1" step="1" placeholder="Units per Pack" value={customForm.units_per_pack} onChange={(e) => setCustomForm({ ...customForm, units_per_pack: e.target.value })} required />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Minimum Stock" value={customForm.min_stock} onChange={(e) => setCustomForm({ ...customForm, min_stock: e.target.value })} />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" placeholder="Rack Location" value={customForm.location} onChange={(e) => setCustomForm({ ...customForm, location: e.target.value })} />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" placeholder="Barcode (optional)" value={customForm.barcode} onChange={(e) => setCustomForm({ ...customForm, barcode: e.target.value })} />

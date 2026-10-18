@@ -33,6 +33,16 @@ export async function createMedicine(payload) {
   return data;
 }
 
+export async function updateMedicineClassification(medicineId, payload) {
+  if (demo()) {
+    const medicine = getDemoData().medicines.find((item) => item.medicine_id === Number(medicineId));
+    if (medicine) Object.assign(medicine, payload);
+    return demoResult(medicine);
+  }
+  const { data } = await api.put(`/medicines/${medicineId}/classification`, payload);
+  return data;
+}
+
 export async function searchInventoryStock(query) {
   if (demo()) return demoResult(enrichInventory().filter((batch) => batch.medicine?.medicine_name.toLowerCase().includes(String(query || '').toLowerCase())));
   const { data } = await api.get('/inventory/search', { params: { q: query } });
@@ -67,6 +77,7 @@ export async function listInventory(filters = {}) {
   if (filters.expiringSoon) params.set('expiringSoon', String(filters.expiringSoon));
   if (filters.expired) params.set('expired', 'true');
   if (filters.medicine_id) params.set('medicine_id', String(filters.medicine_id));
+  if (filters.includeSuppliers === false) params.set('includeSuppliers', 'false');
   const { data } = await api.get(`/inventory${params.toString() ? `?${params.toString()}` : ''}`);
   return data || [];
 }

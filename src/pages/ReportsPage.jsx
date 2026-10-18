@@ -7,13 +7,13 @@ import { getReports, getSettings } from '../services/pharmaService';
 import { exportReportExcel, exportReportPdf } from '../utils/exporters';
 
 const reportMeta = [
-  { key: 'sales', title: 'Sales Report', columns: ['invoice_no', 'invoice_date', 'customer_name', 'customer_phone', 'medicine_name', 'batch_no', 'expiry_date', 'quantity', 'unit_price', 'gst_percent', 'gst_amount', 'line_total', 'invoice_total', 'payment_status'] },
+  { key: 'sales', title: 'Sales Report', columns: ['invoice_no', 'invoice_date', 'customer_name', 'customer_phone', 'medicine_name', 'batch_no', 'expiry_date', 'quantity', 'pack_quantity', 'loose_quantity', 'units_per_pack', 'unit_price', 'gst_percent', 'gst_amount', 'line_total', 'invoice_total', 'payment_status'] },
   { key: 'gst', title: 'GST Report', columns: ['invoice_no', 'invoice_date', 'taxable_amount', 'gst_amount', 'total_amount'] },
-  { key: 'inventory', title: 'Inventory Report', columns: ['medicine_name', 'batch_no', 'expiry_date', 'quantity', 'selling_price', 'location'] },
+  { key: 'inventory', title: 'Inventory Report', columns: ['medicine_name', 'batch_no', 'expiry_date', 'quantity', 'units_per_pack', 'selling_price', 'location'] },
   { key: 'purchases', title: 'Purchase Report', columns: ['purchase_date', 'invoice_no', 'supplier_name', 'total_amount', 'payment_status'] },
   { key: 'customers', title: 'Customer Report', columns: ['customer_name', 'phone', 'email', 'address'] },
   { key: 'suppliers', title: 'Supplier Report', columns: ['supplier_name', 'phone', 'email', 'gst_number', 'address'] },
-  { key: 'batches', title: 'Batch Report', columns: ['batch_no', 'medicine_name', 'expiry_date', 'quantity', 'location'] },
+  { key: 'batches', title: 'Batch Report', columns: ['batch_no', 'medicine_name', 'expiry_date', 'quantity', 'units_per_pack', 'location'] },
 ];
 
 export function ReportsPage() {
@@ -85,7 +85,7 @@ export function ReportsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">Operational Reports</h2>
-            <p className="text-sm text-slate-500">Professional tables from the backend report endpoints.</p>
+            <p className="text-sm text-slate-500">Sales and inventory quantities are individual units; pack counts are shown separately.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={handleExportPdf} className="flex items-center gap-2 rounded-2xl border border-slate-200 px-3 py-2 text-sm text-slate-600"><Download size={16} /> PDF</button>

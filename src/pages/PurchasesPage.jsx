@@ -5,6 +5,7 @@ import { Modal } from '../components/common/Modal';
 import { SearchField } from '../components/common/SearchField';
 import { useToast } from '../components/common/ToastProvider';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { calculateReviewedIndividualUnits, createOcrReviewRow } from '../utils/purchaseUtils';
 import { confirmSupplierInvoice, createPurchase, extractSupplierInvoiceImage, getSuppliers, listPurchases, searchMedicines, formatCurrency } from '../services/pharmaService';
 
 const OCR_ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -22,7 +23,7 @@ export function PurchasesPage() {
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
   const [medicineResults, setMedicineResults] = useState([]);
-  const [form, setForm] = useState({ supplier_id: '', invoice_no: '', notes: '', payment_status: 'Pending', medicine_id: '', batch_no: '', expiry_date: '', quantity: 1, unit_cost: '', selling_price: '', min_stock: 5, location: '' });
+  const [form, setForm] = useState({ supplier_id: '', invoice_no: '', notes: '', payment_status: 'Pending', medicine_id: '', batch_no: '', expiry_date: '', quantity: 1, free_quantity: 0, units_per_pack: 1, unit_cost: '', selling_price: '', min_stock: 5, location: '' });
   const [submitting, setSubmitting] = useState(false);
   const [ocrSelectedImage, setOcrSelectedImage] = useState(null);
   const [ocrRotation, setOcrRotation] = useState(0);
@@ -166,21 +167,7 @@ export function PurchasesPage() {
       setOcrProgress(100);
       setOcrStatus('Invoice extracted. Review the fields before importing.');
       setOcrResult(extracted);
-      setOcrRows((extracted.items || []).map((row, index) => ({
-        id: `${row.medicine || 'row'}-${index}-${Date.now()}`,
-        medicine_name: row.medicine || '',
-        batch_number: row.batch || '',
-        expiry_date: row.expiry || '',
-        quantity: row.quantity ?? '',
-        free_quantity: row.free ?? '',
-        mrp: row.mrp ?? '',
-        purchase_rate: row.rate ?? '',
-        gst_percentage: row.gst ?? '',
-        hsn: row.hsn || '',
-        amount: row.amount ?? '',
-        status: row.quantity || row.mrp || row.rate ? 'Ready' : 'Needs review',
-        warnings: row.quantity || row.mrp || row.rate ? 'Review before importing.' : 'Missing critical invoice data.',
-      })));
+      setOcrRows((extracted.items || []).map(createOcrReviewRow));
     } catch (err) {
       setOcrError(err.response?.data?.message || err.message || 'OCR failed. Please use a clearer supplier invoice image.');
       setOcrResult(null);
@@ -205,6 +192,8 @@ export function PurchasesPage() {
           batch_no: form.batch_no,
           expiry_date: form.expiry_date,
           quantity: Number(form.quantity),
+          free_quantity: Number(form.free_quantity || 0),
+          units_per_pack: Number(form.units_per_pack),
           unit_cost: Number(form.unit_cost || 0),
           selling_price: Number(form.selling_price || 0),
           min_stock: Number(form.min_stock || 5),
@@ -215,7 +204,7 @@ export function PurchasesPage() {
       const purchaseData = await listPurchases();
       setPurchases(purchaseData || []);
       setModalOpen(false);
-      setForm({ supplier_id: '', invoice_no: '', notes: '', payment_status: 'Pending', medicine_id: '', batch_no: '', expiry_date: '', quantity: 1, unit_cost: '', selling_price: '', min_stock: 5, location: '' });
+      setForm({ supplier_id: '', invoice_no: '', notes: '', payment_status: 'Pending', medicine_id: '', batch_no: '', expiry_date: '', quantity: 1, free_quantity: 0, units_per_pack: 1, unit_cost: '', selling_price: '', min_stock: 5, location: '' });
       showToast('Purchase created and inventory updated', 'success');
     } catch (err) {
       showToast(err.response?.data?.message || 'Unable to create purchase', 'error');
@@ -234,12 +223,11 @@ export function PurchasesPage() {
         expiry_date: '',
         quantity: 1,
         free_quantity: 0,
+        units_per_pack: 1,
         mrp: 0,
         purchase_rate: 0,
         gst_percentage: 0,
         hsn: '',
-        is_narcotic: false,
-        is_schedule_h1: false,
         amount: '',
         status: 'Needs review',
         warnings: 'New row: complete the medicine details before import.',
@@ -266,7 +254,9 @@ export function PurchasesPage() {
       if (!String(row.medicine_name || '').trim()) invalidRows.push(`Row ${index + 1}: medicine name is required.`);
       if (!String(row.batch_number || '').trim()) invalidRows.push(`Row ${index + 1}: batch number is required.`);
       if (!String(row.expiry_date || '').trim()) invalidRows.push(`Row ${index + 1}: expiry date is required.`);
-      if (!Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0) invalidRows.push(`Row ${index + 1}: quantity must be a valid positive number.`);
+      if (!Number.isInteger(Number(row.quantity)) || Number(row.quantity) <= 0) invalidRows.push(`Row ${index + 1}: quantity must be a positive whole number.`);
+      if (!Number.isInteger(Number(row.free_quantity)) || Number(row.free_quantity) < 0) invalidRows.push(`Row ${index + 1}: free quantity must be a non-negative whole number.`);
+      if (!Number.isInteger(Number(row.units_per_pack)) || Number(row.units_per_pack) <= 0) invalidRows.push(`Row ${index + 1}: Units per Pack must be a positive whole number.`);
       if (!Number.isFinite(Number(row.mrp)) || Number(row.mrp) <= 0) invalidRows.push(`Row ${index + 1}: MRP must be valid.`);
       if (!Number.isFinite(Number(row.purchase_rate)) || Number(row.purchase_rate) <= 0) invalidRows.push(`Row ${index + 1}: purchase rate must be valid.`);
       if (row.gst_percentage !== '' && row.gst_percentage !== null && row.gst_percentage !== undefined && (!Number.isFinite(Number(row.gst_percentage)) || Number(row.gst_percentage) < 0 || Number(row.gst_percentage) > 100)) {
@@ -293,12 +283,14 @@ export function PurchasesPage() {
           expiry_date: row.expiry_date,
           quantity: Number(row.quantity || 0),
           free_quantity: Number(row.free_quantity || 0),
+          units_per_pack: Number(row.units_per_pack),
           mrp: Number(row.mrp || 0),
           purchase_rate: Number(row.purchase_rate || 0),
           gst_percentage: Number(row.gst_percentage || 0),
           hsn: row.hsn || '',
-          is_narcotic: Boolean(row.is_narcotic),
-          is_schedule_h1: Boolean(row.is_schedule_h1),
+          amount: row.amount === '' || row.amount === null || row.amount === undefined ? null : Number(row.amount),
+          ...(row.is_narcotic !== undefined ? { is_narcotic: Boolean(row.is_narcotic) } : {}),
+          ...(row.is_schedule_h1 !== undefined ? { is_schedule_h1: Boolean(row.is_schedule_h1) } : {}),
         })),
       });
 
@@ -502,7 +494,7 @@ export function PurchasesPage() {
             ) : null}
 
             <div className="overflow-x-auto rounded-2xl border border-slate-200">
-              <table className="min-w-[1100px] w-full text-left text-xs">
+              <table className="min-w-[1280px] w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-600">
                   <tr>
                     <th className="px-2 py-2">Medicine</th>
@@ -510,6 +502,8 @@ export function PurchasesPage() {
                     <th className="px-2 py-2">Expiry</th>
                     <th className="px-2 py-2">Qty</th>
                     <th className="px-2 py-2">Free</th>
+                    <th className="px-2 py-2">Units per Pack</th>
+                    <th className="px-2 py-2">Total Individual Units</th>
                     <th className="px-2 py-2">MRP</th>
                     <th className="px-2 py-2">Rate</th>
                     <th className="px-2 py-2">GST</th>
@@ -525,6 +519,7 @@ export function PurchasesPage() {
                   {ocrRows.map((row, index) => {
                     const hasIssues = row.status !== 'Ready';
                     const isMissing = !row.medicine_name || !row.batch_number || !row.expiry_date;
+                    const individualUnits = calculateReviewedIndividualUnits(row);
 
                     return (
                       <tr key={row.id || `${row.medicine || 'row'}-${index}`} className={`border-t border-slate-200 ${hasIssues ? 'bg-amber-50/40' : 'bg-white'}`}>
@@ -543,6 +538,8 @@ export function PurchasesPage() {
                         </td>
                         <td className="px-2 py-2"><input type="number" value={row.quantity ?? ''} onChange={(event) => updateOcrRow(index, 'quantity', event.target.value === '' ? null : Number(event.target.value))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2"><input type="number" value={row.free_quantity ?? ''} onChange={(event) => updateOcrRow(index, 'free_quantity', event.target.value === '' ? null : Number(event.target.value))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2"><input aria-label={`Units per Pack row ${index + 1}`} type="number" min="1" step="1" value={row.units_per_pack ?? ''} onChange={(event) => updateOcrRow(index, 'units_per_pack', event.target.value === '' ? '' : Number(event.target.value))} className="w-20 rounded border border-slate-200 bg-white px-2 py-1" /></td>
+                        <td className="px-2 py-2 font-medium">{individualUnits ?? '—'}</td>
                         <td className="px-2 py-2"><input type="number" value={row.mrp ?? ''} onChange={(event) => updateOcrRow(index, 'mrp', event.target.value === '' ? null : Number(event.target.value))} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2"><input type="number" value={row.purchase_rate ?? ''} onChange={(event) => updateOcrRow(index, 'purchase_rate', event.target.value === '' ? null : Number(event.target.value))} className="w-16 rounded border border-slate-200 bg-white px-2 py-1" /></td>
                         <td className="px-2 py-2"><input type="number" value={row.gst_percentage ?? ''} onChange={(event) => updateOcrRow(index, 'gst_percentage', event.target.value === '' ? null : Number(event.target.value))} className="w-14 rounded border border-slate-200 bg-white px-2 py-1" /></td>
@@ -597,9 +594,11 @@ export function PurchasesPage() {
           </select>
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Batch number" value={form.batch_no} onChange={(e) => setForm({ ...form, batch_no: e.target.value })} required />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="date" value={form.expiry_date} onChange={(e) => setForm({ ...form, expiry_date: e.target.value })} required />
-          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Purchase price" value={form.unit_cost} onChange={(e) => setForm({ ...form, unit_cost: e.target.value })} required />
-          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Selling price" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} required />
-          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Quantity" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" step="0.01" placeholder="Purchase rate per pack" value={form.unit_cost} onChange={(e) => setForm({ ...form, unit_cost: e.target.value })} required />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" step="0.01" placeholder="Selling price per individual unit" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} required />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="1" step="1" placeholder="Invoice quantity (packs)" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" step="1" placeholder="Free packs" value={form.free_quantity} onChange={(e) => setForm({ ...form, free_quantity: e.target.value })} />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="1" step="1" placeholder="Units per Pack" value={form.units_per_pack} onChange={(e) => setForm({ ...form, units_per_pack: e.target.value })} required />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Minimum stock" value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: e.target.value })} />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" placeholder="Rack location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
           <textarea className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />

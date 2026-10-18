@@ -1,5 +1,6 @@
 import { formatCurrency } from '../../services/pharmaService';
 import { resolvePharmacyLogo } from '../../utils/logoUtils';
+import { getInvoiceDrugClassification } from '../../utils/drugClassification';
 
 export function InvoicePrint({ invoice, settings }) {
   if (!invoice) return null;
@@ -13,15 +14,18 @@ export function InvoicePrint({ invoice, settings }) {
     const gstPercent = Number(item.gst_percent ?? invoice?.gst_percent ?? 0);
     const gstAmount = Number(((lineSubtotal * gstPercent) / 100).toFixed(2));
     const lineTotal = Number((lineSubtotal + gstAmount).toFixed(2));
-    const isNarcotic = Boolean(item.is_narcotic ?? item.medicine?.is_narcotic ?? item.inventoryBatch?.medicine?.is_narcotic ?? false);
-    const isScheduleH1 = Boolean(item.is_schedule_h1 ?? item.medicine?.is_schedule_h1 ?? item.inventoryBatch?.medicine?.is_schedule_h1 ?? false);
-    const classification = isNarcotic ? 'Narcotic' : isScheduleH1 ? 'Schedule H1' : 'Standard';
+    const classification = getInvoiceDrugClassification(item, settings) || 'Standard';
+    const packQuantity = Number(item.pack_quantity || 0);
+    const looseQuantity = Number(item.loose_quantity || (packQuantity ? 0 : quantity));
 
     return {
       medicine_name: item.medicine_name || item.inventoryBatch?.medicine?.medicine_name || '—',
       batch_no: item.batch_no || item.inventoryBatch?.batch_no || '—',
       expiry_date: item.expiry_date || item.inventoryBatch?.expiry_date || '—',
       quantity,
+      sale_description: packQuantity
+        ? `${packQuantity} pack${packQuantity === 1 ? '' : 's'}${looseQuantity ? ` + ${looseQuantity} loose` : ''} (${quantity} units)`
+        : `${quantity} individual unit${quantity === 1 ? '' : 's'}`,
       unit_price: unitPrice,
       gst_percent: gstPercent,
       gst_amount: gstAmount,
@@ -83,7 +87,7 @@ export function InvoicePrint({ invoice, settings }) {
                 <th className="px-4 py-3 text-left">Batch</th>
                 <th className="px-4 py-3 text-left">Expiry</th>
                 {showClassification ? <th className="px-4 py-3 text-left">Drug Class</th> : null}
-                <th className="px-4 py-3 text-left">Qty</th>
+                <th className="px-4 py-3 text-left">Sale / Qty</th>
                 <th className="px-4 py-3 text-left">Unit Price</th>
                 <th className="px-4 py-3 text-left">GST %</th>
                 <th className="px-4 py-3 text-left">GST Amt</th>
@@ -97,7 +101,7 @@ export function InvoicePrint({ invoice, settings }) {
                   <td className="px-4 py-3">{row.batch_no}</td>
                   <td className="px-4 py-3">{row.expiry_date}</td>
                   {showClassification ? <td className="px-4 py-3">{row.classification}</td> : null}
-                  <td className="px-4 py-3">{row.quantity}</td>
+                  <td className="px-4 py-3">{row.sale_description}</td>
                   <td className="px-4 py-3">{formatCurrency(row.unit_price)}</td>
                   <td className="px-4 py-3">{row.gst_percent}%</td>
                   <td className="px-4 py-3">{formatCurrency(row.gst_amount)}</td>

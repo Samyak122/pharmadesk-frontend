@@ -13,3 +13,25 @@ export function calculateInvoiceTotals(items = [], gstPercent = 0, discountAmoun
     totalAmount,
   };
 }
+
+export function calculateIndividualSaleUnits({ saleUnit, quantity, unitsPerPack = 1, packQuantity = 0, looseQuantity = 0 }) {
+  const unitsPerPackage = Number(unitsPerPack);
+  if (!Number.isInteger(unitsPerPackage) || unitsPerPackage <= 0) {
+    throw new Error('Units per Pack must be a positive whole number.');
+  }
+
+  if (saleUnit === 'mixed') {
+    const packs = Number(packQuantity);
+    const loose = Number(looseQuantity);
+    if (!Number.isInteger(packs) || packs < 0 || !Number.isInteger(loose) || loose < 0 || packs + loose <= 0) {
+      throw new Error('Mixed sales need non-negative whole pack and loose quantities, with at least one unit.');
+    }
+    return packs * unitsPerPackage + loose;
+  }
+
+  const saleQuantity = Number(quantity);
+  if (!Number.isInteger(saleQuantity) || saleQuantity <= 0) {
+    throw new Error('Sale quantity must be a positive whole number.');
+  }
+  return saleUnit === 'pack' ? saleQuantity * unitsPerPackage : saleQuantity;
+}

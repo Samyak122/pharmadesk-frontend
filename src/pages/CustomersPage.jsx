@@ -9,6 +9,7 @@ import { createCustomer, formatCurrency, getCustomerHistory, getInvoiceById, get
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { exportInvoicePdf } from '../utils/exporters';
 import { resolvePharmacyLogo } from '../utils/logoUtils';
+import { getInvoiceDrugClassification } from '../utils/drugClassification';
 
 function normalizeInvoiceForPreview(invoice, extra = {}) {
   if (!invoice) return null;
@@ -52,16 +53,19 @@ function normalizeInvoiceForPreview(invoice, extra = {}) {
 function buildInvoicePrintHtml(invoice, settings) {
   const showClassification = Boolean(settings?.show_drug_classification);
   const rows = (invoice?.items || []).map((item) => {
-    const isNarcotic = Boolean(item.is_narcotic ?? item.medicine?.is_narcotic ?? item.inventoryBatch?.medicine?.is_narcotic ?? false);
-    const isScheduleH1 = Boolean(item.is_schedule_h1 ?? item.medicine?.is_schedule_h1 ?? item.inventoryBatch?.medicine?.is_schedule_h1 ?? false);
-    const classification = isNarcotic ? 'Narcotic' : isScheduleH1 ? 'Schedule H1' : 'Standard';
+    const classification = getInvoiceDrugClassification(item, settings) || 'Standard';
+    const packQuantity = Number(item.pack_quantity || 0);
+    const looseQuantity = Number(item.loose_quantity || (packQuantity ? 0 : item.quantity || 0));
+    const saleDescription = packQuantity
+      ? `${packQuantity} pack${packQuantity === 1 ? '' : 's'}${looseQuantity ? ` + ${looseQuantity} loose` : ''} (${item.quantity || 0} units)`
+      : `${item.quantity || 0} individual units`;
     return `
     <tr>
       <td>${item.medicine_name || '—'}</td>
       <td>${item.batch_no || '—'}</td>
       <td>${item.expiry_date || '—'}</td>
       ${showClassification ? `<td>${classification}</td>` : ''}
-      <td>${item.quantity || 0}</td>
+      <td>${saleDescription}</td>
       <td>${formatCurrency(item.unit_price || 0)}</td>
       <td>${item.gst_percent || 0}%</td>
       <td>${formatCurrency(item.gst_amount || 0)}</td>
@@ -119,7 +123,7 @@ function buildInvoicePrintHtml(invoice, settings) {
           <table>
             <thead>
               <tr>
-                <th>Medicine</th><th>Batch</th><th>Expiry</th>${showClassification ? '<th>Drug Class</th>' : ''}<th>Qty</th><th>Unit Price</th><th>GST %</th><th>GST Amt</th><th>Line Total</th>
+                <th>Medicine</th><th>Batch</th><th>Expiry</th>${showClassification ? '<th>Drug Class</th>' : ''}<th>Sale / Qty</th><th>Unit Price</th><th>GST %</th><th>GST Amt</th><th>Line Total</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -267,6 +271,10 @@ export function CustomersPage() {
       const items = (invoiceDetails?.items || []).map((item) => ({
         medicine_id: item.inventoryBatch?.medicine?.medicine_id || item.medicine_id || '',
         quantity: Number(item.quantity || 0),
+        sale_unit: Number(item.pack_quantity || 0) && Number(item.loose_quantity || 0) ? 'mixed' : Number(item.pack_quantity || 0) ? 'pack' : 'loose',
+        pack_quantity: Number(item.pack_quantity || 0),
+        loose_quantity: Number(item.loose_quantity || (!Number(item.pack_quantity || 0) ? item.quantity || 0 : 0)),
+        units_per_pack: Number(item.units_per_pack || 1),
         unit_price: Number(item.unit_price || 0),
         discount_amount: Number(item.discount_amount || 0),
         medicine_name: item.inventoryBatch?.medicine?.medicine_name || item.medicine_name || '',
@@ -297,14 +305,31 @@ export function CustomersPage() {
   const updateInvoiceItem = (index, field, value) => {
     setInvoiceForm((prev) => ({
       ...prev,
-      items: prev.items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item),
+      items: prev.items.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+        const updated = { ...item, [field]: value };
+        if (field === 'pack_quantity' || field === 'loose_quantity') {
+          updated.quantity = Number(updated.pack_quantity || 0) * Number(updated.units_per_pack || 1) + Number(updated.loose_quantity || 0);
+        }
+        if (field === 'sale_unit') {
+          if (value === 'pack') {
+            updated.pack_quantity = Number(updated.pack_quantity || Math.max(1, Math.floor(Number(updated.quantity || 1) / Number(updated.units_per_pack || 1))));
+            updated.loose_quantity = 0;
+          } else if (value === 'loose') {
+            updated.loose_quantity = Number(updated.loose_quantity || updated.quantity || 1);
+            updated.pack_quantity = 0;
+          }
+          updated.quantity = Number(updated.pack_quantity || 0) * Number(updated.units_per_pack || 1) + Number(updated.loose_quantity || 0);
+        }
+        return updated;
+      }),
     }));
   };
 
   const addInvoiceItem = () => {
     setInvoiceForm((prev) => ({
       ...prev,
-      items: [...prev.items, { medicine_id: '', quantity: 1, unit_price: 0, discount_amount: 0, medicine_name: '' }],
+      items: [...prev.items, { medicine_id: '', quantity: 1, sale_unit: 'loose', pack_quantity: 0, loose_quantity: 1, units_per_pack: 1, unit_price: 0, discount_amount: 0, medicine_name: '' }],
     }));
   };
 
@@ -334,6 +359,10 @@ export function CustomersPage() {
           quantity: Number(item.quantity || 0),
           unit_price: Number(item.unit_price || 0),
           discount_amount: Number(item.discount_amount || 0),
+          sale_unit: item.sale_unit,
+          pack_quantity: Number(item.pack_quantity || 0),
+          loose_quantity: Number(item.loose_quantity || 0),
+          units_per_pack: Number(item.units_per_pack || 1),
         })),
       };
 
@@ -489,16 +518,28 @@ export function CustomersPage() {
                             <input className="w-full bg-transparent outline-none" value={item.medicine_id} onChange={(e) => updateInvoiceItem(index, 'medicine_id', e.target.value)} />
                           </label>
                           <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
-                            <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Quantity</span>
-                            <input className="w-full bg-transparent outline-none" type="number" min="1" value={item.quantity} onChange={(e) => updateInvoiceItem(index, 'quantity', e.target.value)} />
+                            <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Sale Unit</span>
+                            <select className="w-full bg-transparent outline-none" value={item.sale_unit} onChange={(e) => updateInvoiceItem(index, 'sale_unit', e.target.value)}>
+                              <option value="pack">Full Pack/Strip</option>
+                              <option value="loose">Loose Units</option>
+                              <option value="mixed">Mixed Pack + Loose</option>
+                            </select>
                           </label>
                           <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
-                            <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Unit Price</span>
+                            <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Full Packs (size {item.units_per_pack})</span>
+                            <input className="w-full bg-transparent outline-none" type="number" min="0" step="1" disabled={item.sale_unit === 'loose'} value={item.pack_quantity} onChange={(e) => updateInvoiceItem(index, 'pack_quantity', e.target.value)} />
+                          </label>
+                          <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+                            <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Loose Units</span>
+                            <input className="w-full bg-transparent outline-none" type="number" min="0" step="1" disabled={item.sale_unit === 'pack'} value={item.loose_quantity} onChange={(e) => updateInvoiceItem(index, 'loose_quantity', e.target.value)} />
+                          </label>
+                          <label className="rounded-2xl border border-slate-200 px-3 py-2 text-sm">
+                            <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Price per Individual Unit</span>
                             <input className="w-full bg-transparent outline-none" type="number" min="0" step="0.01" value={item.unit_price} onChange={(e) => updateInvoiceItem(index, 'unit_price', e.target.value)} />
                           </label>
                         </div>
                         <div className="mt-3 flex items-center justify-between">
-                          <div className="text-sm text-slate-500">Medicine name: {item.medicine_name || '—'}</div>
+                          <div className="text-sm text-slate-500">Medicine name: {item.medicine_name || '—'} · {item.quantity} individual units</div>
                           <button type="button" onClick={() => removeInvoiceItem(index)} className="rounded-2xl border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700">Remove</button>
                         </div>
                       </div>

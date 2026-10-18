@@ -4,7 +4,7 @@ import { EmptyState } from '../components/common/EmptyState';
 import { Modal } from '../components/common/Modal';
 import { SearchField } from '../components/common/SearchField';
 import { useToast } from '../components/common/ToastProvider';
-import { createInventory, createMedicine, searchMedicines } from '../services/pharmaService';
+import { createInventory, createMedicine, searchMedicines, updateMedicineClassification } from '../services/pharmaService';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
 export function MedicinesPage() {
@@ -16,11 +16,14 @@ export function MedicinesPage() {
   const debouncedSearch = useDebouncedValue(search, 300);
   const [selectedMedicine, setSelectedMedicine] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState({ batch_no: '', expiry_date: '', quantity: 10, unit_cost: '', selling_price: '', min_stock: 5, location: '' });
+  const [form, setForm] = useState({ batch_no: '', expiry_date: '', quantity: 10, units_per_pack: 1, unit_cost: '', selling_price: '', min_stock: 5, location: '' });
   const [submitting, setSubmitting] = useState(false);
   const [customModalOpen, setCustomModalOpen] = useState(false);
-  const [customForm, setCustomForm] = useState({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, min_stock: 5, location: '', barcode: '', is_narcotic: false, is_schedule_h1: false });
+  const [customForm, setCustomForm] = useState({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, units_per_pack: 1, min_stock: 5, location: '', barcode: '', is_narcotic: false, is_schedule_h1: false });
   const [customSubmitting, setCustomSubmitting] = useState(false);
+  const [classificationMedicine, setClassificationMedicine] = useState(null);
+  const [classificationForm, setClassificationForm] = useState({ is_narcotic: false, is_schedule_h1: false });
+  const [classificationSaving, setClassificationSaving] = useState(false);
   const { showToast } = useToast();
 
   const loadMedicines = async (keyword = debouncedSearch || 'a') => {
@@ -59,6 +62,29 @@ export function MedicinesPage() {
     setModalOpen(true);
   };
 
+  const openClassificationModal = (medicine) => {
+    setClassificationMedicine(medicine);
+    setClassificationForm({
+      is_narcotic: Boolean(medicine.is_narcotic),
+      is_schedule_h1: Boolean(medicine.is_schedule_h1),
+    });
+  };
+
+  const saveClassification = async (event) => {
+    event.preventDefault();
+    try {
+      setClassificationSaving(true);
+      await updateMedicineClassification(classificationMedicine.medicine_id, classificationForm);
+      setClassificationMedicine(null);
+      await loadMedicines(search);
+      showToast('Medicine classification updated', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Unable to update classification', 'error');
+    } finally {
+      setClassificationSaving(false);
+    }
+  };
+
   const submitInventory = async (event) => {
     event.preventDefault();
     try {
@@ -68,13 +94,14 @@ export function MedicinesPage() {
         batch_no: form.batch_no,
         expiry_date: form.expiry_date,
         quantity: Number(form.quantity),
+        units_per_pack: Number(form.units_per_pack || 1),
         unit_cost: Number(form.unit_cost || 0),
         selling_price: Number(form.selling_price || 0),
         min_stock: Number(form.min_stock || 5),
         location: form.location,
       });
       setModalOpen(false);
-      setForm({ batch_no: '', expiry_date: '', quantity: 10, unit_cost: '', selling_price: '', min_stock: 5, location: '' });
+      setForm({ batch_no: '', expiry_date: '', quantity: 10, units_per_pack: 1, unit_cost: '', selling_price: '', min_stock: 5, location: '' });
       await loadMedicines(search);
       showToast('Inventory batch added', 'success');
     } catch (err) {
@@ -105,6 +132,7 @@ export function MedicinesPage() {
         batch_no: customForm.batch_no,
         expiry_date: customForm.expiry_date,
         quantity: Number(customForm.quantity || 0),
+        units_per_pack: Number(customForm.units_per_pack || 1),
         unit_cost: Number(customForm.purchase_price || 0),
         selling_price: Number(customForm.selling_price || 0),
         min_stock: Number(customForm.min_stock || 5),
@@ -112,7 +140,7 @@ export function MedicinesPage() {
       });
 
       setCustomModalOpen(false);
-      setCustomForm({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, min_stock: 5, location: '', barcode: '', is_narcotic: false, is_schedule_h1: false });
+      setCustomForm({ medicine_name: '', manufacturer: '', composition: '', category: '', hsn_code: '', gst_percent: '', purchase_price: '', selling_price: '', batch_no: '', expiry_date: '', quantity: 10, units_per_pack: 1, min_stock: 5, location: '', barcode: '', is_narcotic: false, is_schedule_h1: false });
       setSearch(createdMedicine.medicine_name);
       await loadMedicines(createdMedicine.medicine_name);
       showToast('Custom product created and added to inventory', 'success');
@@ -155,6 +183,15 @@ export function MedicinesPage() {
               <h3 className="font-semibold text-slate-900">{medicine.medicine_name}</h3>
               <p className="mt-2 text-sm text-slate-500">Manufacturer: {medicine.manufacturer || '—'}</p>
               <p className="mt-2 text-sm text-slate-500">Composition: {medicine.composition || '—'}</p>
+              <p className="mt-2 text-sm text-slate-600">
+                Classification: {[
+                  medicine.is_schedule_h1 ? 'Schedule H1' : '',
+                  medicine.is_narcotic ? 'Narcotic' : '',
+                ].filter(Boolean).join(' · ') || 'Neither'}
+              </p>
+              <button type="button" onClick={() => openClassificationModal(medicine)} className="mt-3 rounded-2xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700">
+                Edit Classification
+              </button>
               <button type="button" onClick={() => openModal(medicine)} className="mt-4 flex items-center gap-2 rounded-2xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white">
                 <PlusCircle size={16} /> Add To Inventory
               </button>
@@ -169,12 +206,34 @@ export function MedicinesPage() {
         <form onSubmit={submitInventory} className="grid gap-3 md:grid-cols-2">
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Batch Number" value={form.batch_no} onChange={(e) => setForm({ ...form, batch_no: e.target.value })} required />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="date" value={form.expiry_date} onChange={(e) => setForm({ ...form, expiry_date: e.target.value })} required />
-          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Purchase Price" value={form.unit_cost} onChange={(e) => setForm({ ...form, unit_cost: e.target.value })} />
-          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Selling Price" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} />
-          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Quantity" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Purchase cost per individual unit" value={form.unit_cost} onChange={(e) => setForm({ ...form, unit_cost: e.target.value })} />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Selling price per individual unit" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Stock quantity (individual units)" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="1" step="1" placeholder="Units per Pack" value={form.units_per_pack} onChange={(e) => setForm({ ...form, units_per_pack: e.target.value })} required />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Minimum Stock" value={form.min_stock} onChange={(e) => setForm({ ...form, min_stock: e.target.value })} />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" placeholder="Rack Location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
           <button disabled={submitting} type="submit" className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white md:col-span-2 disabled:opacity-70">{submitting ? 'Saving...' : 'Save Batch'}</button>
+        </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(classificationMedicine)}
+        title={`Classify ${classificationMedicine?.medicine_name || 'Medicine'}`}
+        description="Set each classification explicitly. Both, either one, or neither can be selected."
+        onClose={() => setClassificationMedicine(null)}
+      >
+        <form onSubmit={saveClassification} className="space-y-4">
+          <label className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+            <span>Schedule H1</span>
+            <input type="checkbox" checked={classificationForm.is_schedule_h1} onChange={(event) => setClassificationForm((prev) => ({ ...prev, is_schedule_h1: event.target.checked }))} />
+          </label>
+          <label className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+            <span>Narcotic</span>
+            <input type="checkbox" checked={classificationForm.is_narcotic} onChange={(event) => setClassificationForm((prev) => ({ ...prev, is_narcotic: event.target.checked }))} />
+          </label>
+          <button disabled={classificationSaving} type="submit" className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-70">
+            {classificationSaving ? 'Saving...' : 'Save Classification'}
+          </button>
         </form>
       </Modal>
 
@@ -186,11 +245,12 @@ export function MedicinesPage() {
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Composition (optional)" value={customForm.composition} onChange={(e) => setCustomForm({ ...customForm, composition: e.target.value })} />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="HSN Code (optional)" value={customForm.hsn_code} onChange={(e) => setCustomForm({ ...customForm, hsn_code: e.target.value })} />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="GST %" value={customForm.gst_percent} onChange={(e) => setCustomForm({ ...customForm, gst_percent: e.target.value })} />
-          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Purchase Price" value={customForm.purchase_price} onChange={(e) => setCustomForm({ ...customForm, purchase_price: e.target.value })} />
-          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Selling Price" value={customForm.selling_price} onChange={(e) => setCustomForm({ ...customForm, selling_price: e.target.value })} />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Purchase cost per individual unit" value={customForm.purchase_price} onChange={(e) => setCustomForm({ ...customForm, purchase_price: e.target.value })} />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Selling price per individual unit" value={customForm.selling_price} onChange={(e) => setCustomForm({ ...customForm, selling_price: e.target.value })} />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" placeholder="Batch Number" value={customForm.batch_no} onChange={(e) => setCustomForm({ ...customForm, batch_no: e.target.value })} required />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="date" value={customForm.expiry_date} onChange={(e) => setCustomForm({ ...customForm, expiry_date: e.target.value })} required />
-          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Quantity" value={customForm.quantity} onChange={(e) => setCustomForm({ ...customForm, quantity: e.target.value })} required />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Stock quantity (individual units)" value={customForm.quantity} onChange={(e) => setCustomForm({ ...customForm, quantity: e.target.value })} required />
+          <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="1" step="1" placeholder="Units per Pack" value={customForm.units_per_pack} onChange={(e) => setCustomForm({ ...customForm, units_per_pack: e.target.value })} required />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm" type="number" min="0" placeholder="Minimum Stock" value={customForm.min_stock} onChange={(e) => setCustomForm({ ...customForm, min_stock: e.target.value })} />
           <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm md:col-span-2" placeholder="Rack Location" value={customForm.location} onChange={(e) => setCustomForm({ ...customForm, location: e.target.value })} />
           <div className="flex flex-wrap gap-4 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 md:col-span-2">

@@ -10,7 +10,7 @@ import { createCustomer, createInvoice, getSettings, listCustomers, listInvoices
 import { formatCurrency } from '../services/pharmaService';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { exportInvoicePdf } from '../utils/exporters';
-import { calculateInvoiceTotals } from '../utils/billingUtils';
+import { calculateIndividualSaleUnits, calculateInvoiceTotals } from '../utils/billingUtils';
 
 export function BillingPage() {
   const location = useLocation();
@@ -33,6 +33,7 @@ export function BillingPage() {
   const [availableBatches, setAvailableBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const [saleUnit, setSaleUnit] = useState('loose');
   const [cart, setCart] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [settings, setSettings] = useState(null);
@@ -156,11 +157,13 @@ export function BillingPage() {
     setSelectedMedicine(medicine);
     setSelectedBatch(null);
     setAvailableBatches([]);
+    setQuantity(1);
+    setSaleUnit('loose');
 
     if (!medicineId) return;
 
     try {
-      const batches = await listInventory({ medicine_id: Number(medicineId) });
+      const batches = await listInventory({ medicine_id: Number(medicineId), includeSuppliers: false });
       const activeBatches = (batches || []).filter((batch) => Number(batch.quantity || 0) > 0);
       setAvailableBatches(activeBatches);
       setSelectedBatch(activeBatches[0] || null);
@@ -222,13 +225,21 @@ export function BillingPage() {
       return;
     }
 
-    const nextQty = Number(quantity || 0);
-    const availableQty = Number(selectedBatch.quantity || 0);
-
-    if (!Number.isFinite(nextQty) || nextQty <= 0) {
-      showToast('Enter a valid quantity.', 'error');
+    const saleQuantity = Number(quantity || 0);
+    const unitsPerPack = Number(selectedBatch.units_per_pack || 1);
+    if (!Number.isInteger(saleQuantity) || saleQuantity <= 0) {
+      showToast('Enter a positive whole-number quantity.', 'error');
       return;
     }
+    const nextQty = calculateIndividualSaleUnits({ saleUnit, quantity: saleQuantity, unitsPerPack });
+    const availableQty = availableBatches
+      .filter((batch) => saleUnit !== 'pack' || Number(batch.units_per_pack || 1) === unitsPerPack)
+      .reduce((sum, batch) => {
+        const batchQuantity = Number(batch.quantity || 0);
+        return sum + (saleUnit === 'pack'
+          ? Math.floor(batchQuantity / unitsPerPack) * unitsPerPack
+          : batchQuantity);
+      }, 0);
 
     if (nextQty > availableQty) {
       showToast(`Only ${availableQty} units available in the selected batch.`, 'error');
@@ -242,31 +253,42 @@ export function BillingPage() {
       batch_no: selectedBatch.batch_no,
       expiry_date: selectedBatch.expiry_date,
       quantity: nextQty,
+      sale_unit: saleUnit === 'pack' ? 'pack' : 'loose',
+      sale_quantity: saleQuantity,
+      pack_quantity: saleUnit === 'pack' ? saleQuantity : 0,
+      loose_quantity: saleUnit === 'loose' ? saleQuantity : 0,
+      units_per_pack: unitsPerPack,
       unit_price: Number(selectedBatch.selling_price || 0),
       gst_percent: Number(gstPercent || 0),
       available_quantity: availableQty,
+      is_narcotic: Boolean(selectedMedicine.is_narcotic),
+      is_schedule_h1: Boolean(selectedMedicine.is_schedule_h1),
     };
 
-    setCart((prev) => {
-      const existingIndex = prev.findIndex((item) => String(item.stock_id) === String(lineItem.stock_id));
-      if (existingIndex >= 0) {
-        return prev.map((item, index) => (index === existingIndex ? { ...item, quantity: item.quantity + lineItem.quantity } : item));
-      }
-      return [...prev, lineItem];
-    });
+    setCart((prev) => [...prev, lineItem]);
 
     setQuantity(1);
     showToast('Medicine added to bill', 'success');
   };
 
-  const updateCartItem = (index, nextQty) => {
-    const normalized = Number(nextQty || 0);
+  const updateCartItem = (index, nextSaleQuantity) => {
+    const normalized = Number(nextSaleQuantity || 0);
     if (normalized <= 0) {
       setCart((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
       return;
     }
 
-    setCart((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: normalized } : item)));
+    setCart((prev) => prev.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const quantityInUnits = item.sale_unit === 'pack' ? normalized * item.units_per_pack : normalized;
+      return {
+        ...item,
+        sale_quantity: normalized,
+        quantity: quantityInUnits,
+        pack_quantity: item.sale_unit === 'pack' ? normalized : 0,
+        loose_quantity: item.sale_unit === 'loose' ? normalized : 0,
+      };
+    }));
   };
 
   const removeCartItem = (index) => {
@@ -301,6 +323,10 @@ export function BillingPage() {
           quantity: Number(item.quantity || 0),
           unit_price: Number(item.unit_price || 0),
           discount_amount: Number(discountAmount || 0),
+          sale_unit: item.sale_unit,
+          pack_quantity: Number(item.pack_quantity || 0),
+          loose_quantity: Number(item.loose_quantity || 0),
+          units_per_pack: Number(item.units_per_pack || 1),
         })),
       };
 
@@ -342,6 +368,7 @@ export function BillingPage() {
       setAvailableBatches([]);
       setSelectedBatch(null);
       setQuantity(1);
+      setSaleUnit('loose');
       setInvoiceNumber('');
       setInvoiceDate(new Date().toISOString().slice(0, 10));
       setPaymentMethod('Cash');
@@ -465,6 +492,12 @@ export function BillingPage() {
                 {selectedMedicine ? (
                   <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
                     <p className="font-semibold text-slate-900">{selectedMedicine.medicine_name}</p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Classification: {[
+                        selectedMedicine.is_schedule_h1 ? 'Schedule H1' : '',
+                        selectedMedicine.is_narcotic ? 'Narcotic' : '',
+                      ].filter(Boolean).join(' · ') || 'Neither'}
+                    </p>
                     {availableBatches.length ? (
                       <label className="mt-3 block rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
                         <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Batch</span>
@@ -478,22 +511,33 @@ export function BillingPage() {
                     <div className="mt-2 grid gap-2 sm:grid-cols-2">
                       <div><span className="text-slate-400">Batch</span><p className="font-medium text-slate-700">{selectedBatch?.batch_no || '—'}</p></div>
                       <div><span className="text-slate-400">Expiry</span><p className="font-medium text-slate-700">{selectedBatch?.expiry_date || '—'}</p></div>
-                      <div><span className="text-slate-400">Available</span><p className="font-medium text-slate-700">{selectedBatch ? `${selectedBatch.quantity}` : '—'}</p></div>
-                      <div><span className="text-slate-400">Selling Price</span><p className="font-medium text-slate-700">{selectedBatch ? formatCurrency(selectedBatch.selling_price) : '—'}</p></div>
+                      <div><span className="text-slate-400">Available individual units</span><p className="font-medium text-slate-700">{selectedBatch ? `${selectedBatch.quantity}` : '—'}</p></div>
+                      <div><span className="text-slate-400">Pack size</span><p className="font-medium text-slate-700">{selectedBatch ? `${Number(selectedBatch.units_per_pack || 1)} units` : '—'}</p></div>
+                      <div><span className="text-slate-400">Selling price per unit</span><p className="font-medium text-slate-700">{selectedBatch ? formatCurrency(selectedBatch.selling_price) : '—'}</p></div>
                     </div>
                   </div>
                 ) : null}
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                    <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Quantity</span>
-                    <input className="w-full bg-transparent outline-none" type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+                    <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Sale Unit</span>
+                    <select className="w-full bg-transparent outline-none" value={saleUnit} onChange={(e) => setSaleUnit(e.target.value)}>
+                      <option value="pack">Full Pack/Strip</option>
+                      <option value="loose">Loose Units</option>
+                    </select>
                   </label>
                   <label className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                    <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Unit Price</span>
+                    <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">{saleUnit === 'pack' ? 'Number of Packs/Strips' : 'Number of Individual Units'}</span>
+                    <input className="w-full bg-transparent outline-none" type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+                  </label>
+                  <label className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 sm:col-span-2">
+                    <span className="mb-1 block text-xs uppercase tracking-[0.3em] text-slate-400">Price per Individual Unit</span>
                     <input className="w-full bg-transparent outline-none" type="number" step="0.01" min="0" value={selectedBatch?.selling_price || ''} readOnly />
                   </label>
                 </div>
+                <p className="text-xs text-slate-500">
+                  Stock units to deduct: {selectedBatch ? saleUnit === 'pack' ? `${Number(quantity || 0) * Number(selectedBatch.units_per_pack || 1)} individual units` : `${Number(quantity || 0)} individual units` : '—'}
+                </p>
                 <button type="button" onClick={addToCart} className="flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">
                   <PlusCircle size={16} /> Add to Bill
                 </button>
@@ -549,13 +593,13 @@ export function BillingPage() {
             </div>
 
             {cart.length ? (
-              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-                <table className="min-w-full text-left text-sm">
+              <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="min-w-[680px] text-left text-sm">
                   <thead className="bg-slate-50 text-slate-600">
                     <tr>
                       <th className="px-3 py-3">Medicine</th>
                       <th className="px-3 py-3">Batch</th>
-                      <th className="px-3 py-3">Qty</th>
+                      <th className="px-3 py-3">Sale</th>
                       <th className="px-3 py-3">Price</th>
                       <th className="px-3 py-3">Total</th>
                       <th className="px-3 py-3">Actions</th>
@@ -567,12 +611,20 @@ export function BillingPage() {
                         <td className="px-3 py-3">
                           <p className="font-medium text-slate-900">{item.medicine_name}</p>
                           <p className="text-xs text-slate-500">{item.expiry_date}</p>
+                          <p className="text-xs text-slate-600">
+                            Classification: {[
+                              item.is_schedule_h1 ? 'Schedule H1' : '',
+                              item.is_narcotic ? 'Narcotic' : '',
+                            ].filter(Boolean).join(' · ') || 'Neither'}
+                          </p>
                         </td>
                         <td className="px-3 py-3">{item.batch_no}</td>
                         <td className="px-3 py-3">
-                          <input className="w-16 rounded-xl border border-slate-200 px-2 py-1 text-sm" type="number" min="1" value={item.quantity} onChange={(e) => updateCartItem(index, e.target.value)} />
+                          <span className="block whitespace-nowrap text-xs">{item.sale_unit === 'pack' ? 'Full Pack/Strip' : 'Loose Units'}</span>
+                          <input aria-label={`Sale quantity for ${item.medicine_name}`} className="mt-1 w-16 rounded-xl border border-slate-200 px-2 py-1 text-sm" type="number" min="1" step="1" value={item.sale_quantity} onChange={(e) => updateCartItem(index, e.target.value)} />
+                          <span className="block whitespace-nowrap text-xs text-slate-500">{item.sale_unit === 'pack' ? `${item.sale_quantity} × ${item.units_per_pack} = ${item.quantity} units` : `${item.quantity} units`}</span>
                         </td>
-                        <td className="px-3 py-3">{formatCurrency(item.unit_price)}</td>
+                        <td className="px-3 py-3">{formatCurrency(item.unit_price)} / unit</td>
                         <td className="px-3 py-3">{formatCurrency(Number(item.unit_price || 0) * Number(item.quantity || 0))}</td>
                         <td className="px-3 py-3">
                           <button type="button" onClick={() => removeCartItem(index)} className="rounded-full border border-rose-200 p-2 text-rose-700">
