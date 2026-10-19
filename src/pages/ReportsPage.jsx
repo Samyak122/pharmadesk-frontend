@@ -5,15 +5,18 @@ import { SearchField } from '../components/common/SearchField';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { getReports, getSettings } from '../services/pharmaService';
 import { exportReportExcel, exportReportPdf } from '../utils/exporters';
+import { getDrugClassificationLabel } from '../utils/drugClassification';
+
+const formatReportColumnLabel = (column) => column === 'drug_classification' ? 'Drug Classification' : column.replace(/_/g, ' ');
 
 const reportMeta = [
-  { key: 'sales', title: 'Sales Report', columns: ['invoice_no', 'invoice_date', 'customer_name', 'customer_phone', 'medicine_name', 'batch_no', 'expiry_date', 'quantity', 'pack_quantity', 'loose_quantity', 'units_per_pack', 'unit_price', 'gst_percent', 'gst_amount', 'line_total', 'invoice_total', 'payment_status'] },
+  { key: 'sales', title: 'Sales Report', columns: ['invoice_no', 'invoice_date', 'customer_name', 'customer_phone', 'medicine_name', 'drug_classification', 'batch_no', 'expiry_date', 'quantity', 'pack_quantity', 'loose_quantity', 'units_per_pack', 'unit_price', 'gst_percent', 'gst_amount', 'line_total', 'invoice_total', 'payment_status'] },
   { key: 'gst', title: 'GST Report', columns: ['invoice_no', 'invoice_date', 'taxable_amount', 'gst_amount', 'total_amount'] },
-  { key: 'inventory', title: 'Inventory Report', columns: ['medicine_name', 'batch_no', 'expiry_date', 'quantity', 'units_per_pack', 'selling_price', 'location'] },
+  { key: 'inventory', title: 'Inventory Report', columns: ['medicine_name', 'drug_classification', 'batch_no', 'expiry_date', 'quantity', 'units_per_pack', 'selling_price', 'location'] },
   { key: 'purchases', title: 'Purchase Report', columns: ['purchase_date', 'invoice_no', 'supplier_name', 'total_amount', 'payment_status'] },
   { key: 'customers', title: 'Customer Report', columns: ['customer_name', 'phone', 'email', 'address'] },
   { key: 'suppliers', title: 'Supplier Report', columns: ['supplier_name', 'phone', 'email', 'gst_number', 'address'] },
-  { key: 'batches', title: 'Batch Report', columns: ['batch_no', 'medicine_name', 'expiry_date', 'quantity', 'units_per_pack', 'location'] },
+  { key: 'batches', title: 'Batch Report', columns: ['batch_no', 'medicine_name', 'drug_classification', 'expiry_date', 'quantity', 'units_per_pack', 'location'] },
 ];
 
 export function ReportsPage() {
@@ -52,7 +55,13 @@ export function ReportsPage() {
     const source = reports[activeReport] || [];
     if (!report) return [];
 
-    return source.filter((row) => {
+    return source.map((row) => {
+      const normalizedRow = { ...row };
+      if (report.columns.includes('drug_classification')) {
+        normalizedRow.drug_classification = normalizedRow.drug_classification ?? getDrugClassificationLabel(normalizedRow);
+      }
+      return normalizedRow;
+    }).filter((row) => {
       const haystack = Object.values(row).join(' ').toLowerCase();
       return haystack.includes(debouncedSearch.toLowerCase());
     });
@@ -118,7 +127,7 @@ export function ReportsPage() {
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-50 text-slate-600">
                   <tr>
-                    {reportMeta.find((report) => report.key === activeReport)?.columns.map((column) => <th key={column} className="px-4 py-3">{column.replace(/_/g, ' ')}</th>)}
+                    {reportMeta.find((report) => report.key === activeReport)?.columns.map((column) => <th key={column} className="px-4 py-3">{formatReportColumnLabel(column)}</th>)}
                   </tr>
                 </thead>
                 <tbody>

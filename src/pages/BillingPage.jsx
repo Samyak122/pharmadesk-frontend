@@ -11,6 +11,7 @@ import { formatCurrency } from '../services/pharmaService';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { exportInvoicePdf } from '../utils/exporters';
 import { calculateIndividualSaleUnits, calculateInvoiceTotals } from '../utils/billingUtils';
+import { getDrugClassificationLabel } from '../utils/drugClassification';
 
 export function BillingPage() {
   const location = useLocation();
@@ -493,10 +494,7 @@ export function BillingPage() {
                   <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
                     <p className="font-semibold text-slate-900">{selectedMedicine.medicine_name}</p>
                     <p className="mt-1 text-xs text-slate-600">
-                      Classification: {[
-                        selectedMedicine.is_schedule_h1 ? 'Schedule H1' : '',
-                        selectedMedicine.is_narcotic ? 'Narcotic' : '',
-                      ].filter(Boolean).join(' · ') || 'Neither'}
+                      Classification: {getDrugClassificationLabel(selectedMedicine)}
                     </p>
                     {availableBatches.length ? (
                       <label className="mt-3 block rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
@@ -612,10 +610,7 @@ export function BillingPage() {
                           <p className="font-medium text-slate-900">{item.medicine_name}</p>
                           <p className="text-xs text-slate-500">{item.expiry_date}</p>
                           <p className="text-xs text-slate-600">
-                            Classification: {[
-                              item.is_schedule_h1 ? 'Schedule H1' : '',
-                              item.is_narcotic ? 'Narcotic' : '',
-                            ].filter(Boolean).join(' · ') || 'Neither'}
+                            Classification: {getDrugClassificationLabel(item)}
                           </p>
                         </td>
                         <td className="px-3 py-3">{item.batch_no}</td>

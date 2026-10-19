@@ -4,11 +4,13 @@ import * as XLSX from 'xlsx';
 import { resolvePharmacyLogo } from './logoUtils';
 import { getInvoiceDrugClassification } from './drugClassification';
 
+const formatExportColumnHeader = (column) => (column === 'drug_classification' ? 'Drug Classification' : column.replace(/_/g, ' '));
+
 export function exportReportExcel(reportName, rows, columns) {
   const worksheet = XLSX.utils.json_to_sheet(rows.map((row) => {
     const mapped = {};
     columns.forEach((column) => {
-      mapped[column.replace(/_/g, ' ')] = row[column] ?? '';
+      mapped[formatExportColumnHeader(column)] = row[column] ?? '';
     });
     return mapped;
   }));
@@ -33,7 +35,7 @@ export function exportReportPdf(reportName, rows, columns, settings = {}) {
   const tableRows = rows.map((row) => columns.map((column) => row[column] ?? ''));
   autoTable(doc, {
     startY: 100,
-    head: [columns.map((column) => column.replace(/_/g, ' '))],
+    head: [columns.map((column) => formatExportColumnHeader(column))],
     body: tableRows,
     styles: { fontSize: 8 },
     headStyles: { fillColor: [15, 23, 42] },

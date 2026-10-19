@@ -6,6 +6,7 @@ import { SearchField } from '../components/common/SearchField';
 import { useToast } from '../components/common/ToastProvider';
 import { createInventory, createMedicine, searchMedicines, updateMedicineClassification } from '../services/pharmaService';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { getDrugClassificationLabel } from '../utils/drugClassification';
 
 export function MedicinesPage() {
   const [medicines, setMedicines] = useState([]);
@@ -184,10 +185,7 @@ export function MedicinesPage() {
               <p className="mt-2 text-sm text-slate-500">Manufacturer: {medicine.manufacturer || '—'}</p>
               <p className="mt-2 text-sm text-slate-500">Composition: {medicine.composition || '—'}</p>
               <p className="mt-2 text-sm text-slate-600">
-                Classification: {[
-                  medicine.is_schedule_h1 ? 'Schedule H1' : '',
-                  medicine.is_narcotic ? 'Narcotic' : '',
-                ].filter(Boolean).join(' · ') || 'Neither'}
+                Classification: {getDrugClassificationLabel(medicine)}
               </p>
               <button type="button" onClick={() => openClassificationModal(medicine)} className="mt-3 rounded-2xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700">
                 Edit Classification

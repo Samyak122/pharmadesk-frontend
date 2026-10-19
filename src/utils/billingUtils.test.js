@@ -52,8 +52,8 @@ describe('drug classification labels', () => {
   it.each([
     [{ is_schedule_h1: true, is_narcotic: false }, 'Schedule H1'],
     [{ is_schedule_h1: false, is_narcotic: true }, 'Narcotic'],
-    [{ is_schedule_h1: true, is_narcotic: true }, 'Schedule H1 · Narcotic'],
-    [{ is_schedule_h1: false, is_narcotic: false }, 'Neither'],
+    [{ is_schedule_h1: true, is_narcotic: true }, 'Schedule H1, Narcotic'],
+    [{ is_schedule_h1: false, is_narcotic: false }, 'Regular'],
   ])('labels classification flags %j', (item, expected) => {
     expect(getDrugClassificationLabel(item)).toBe(expected);
   });
@@ -61,7 +61,7 @@ describe('drug classification labels', () => {
   it('only includes classification in invoices when the pharmacy setting enables it', () => {
     const item = { is_schedule_h1: true, is_narcotic: true };
     expect(getInvoiceDrugClassification(item, { show_drug_classification: false })).toBeNull();
-    expect(getInvoiceDrugClassification(item, { show_drug_classification: true })).toBe('Schedule H1 · Narcotic');
+    expect(getInvoiceDrugClassification(item, { show_drug_classification: true })).toBe('Schedule H1, Narcotic');
   });
 });
 
